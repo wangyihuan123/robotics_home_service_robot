@@ -18,7 +18,7 @@
 
 
   <!-- World File -->
-  <arg name="world_file" default="$(find my_robot)/worlds/office.world"/>
+  <arg name="world_file" default="$(find my_robot)/worlds/office_with_ball.world"/>
 
   <!-- Launch Gazebo World -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
