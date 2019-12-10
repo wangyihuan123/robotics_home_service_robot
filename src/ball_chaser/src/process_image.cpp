@@ -37,10 +37,6 @@ void process_image_callback(const sensor_msgs::Image img)
     int x = 0;
     int left_threshold = (img.step / 10) * 3;
     int right_threshold = (img.step / 10) * 7;
-    enum  { left = 0, middle, right, unknown } whiteball_position = unknown;
-    int pixel_whiteball_in_left = 0;
-    int pixel_whiteball_in_right = 0;
-    int pixel_whiteball_in_middle = 0;
 
     // check middle first
     for (int i = left_threshold; i < img.height * img.step; i += 3) {
@@ -78,7 +74,7 @@ void process_image_callback(const sensor_msgs::Image img)
         }
     }
 
-    // then right side
+    // then left side
     for (int i = 0; i < img.height * img.step; i += 3) {
         x = i % img.step;
         if ( x < left_threshold) { 
@@ -98,19 +94,6 @@ void process_image_callback(const sensor_msgs::Image img)
         drive_robot(0.0, 0.0);
         return;
     } 
-
-    // if((pixel_whiteball_in_middle >= pixel_whiteball_in_left) && (pixel_whiteball_in_middle >= pixel_whiteball_in_right)) {
-    //     ROS_INFO_STREAM("middle, go ahead!");
-    //     drive_robot(0.5, 0.0);
-    // }
-    // else if ((pixel_whiteball_in_left >= pixel_whiteball_in_middle) && (pixel_whiteball_in_left >= pixel_whiteball_in_right)) {
-    //     ROS_INFO_STREAM("turn left");
-    //     drive_robot(0.0, 0.5);
-    // }
-    // else {
-    //     ROS_INFO_STREAM("turn right");
-    //     drive_robot(0.0, -0.5);
-    // }
         
 }
 
