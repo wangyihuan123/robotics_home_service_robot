@@ -35,41 +35,41 @@ void process_image_callback(const sensor_msgs::Image img)
     // Request a stop when there's no white ball seen by the camera
 
     int x = 0;
-    int left_threshold = (img.step / 10) * 3;
-    int right_threshold = (img.step / 10) * 7;
+    int left_threshold = (img.step / 10) * 4;
+    int right_threshold = (img.step / 10) * 6;
 
     // check middle first
     for (int i = left_threshold; i < img.height * img.step; i += 3) {
         x = i % img.step;
         if (x > left_threshold && x < right_threshold) { 
             //middle
-            if (img.data[i] == white_pixel) {
+            if (img.data[i] == white_pixel && img.data[i+1] == white_pixel && img.data[i+2] == white_pixel) {
                 stop = false;
                 ROS_INFO_STREAM("middle, go ahead!");
-                drive_robot(0.1, 0.0);
-                break;
-            }      
+                drive_robot(0.3, 0.0);
+                return;
+            }
         } else if (x < left_threshold) {
             // left side
             continue;
         } else if (x > right_threshold) {
             // at the right side
-            i += (img.step / 10) * 6;
+            i += (img.step / 10) * 8;
         }
     }
 
     // then right side
     for (int i = right_threshold; i < img.height * img.step; i += 3) {
         x = i % img.step;
-        if ( x < right_threshold) { 
-            i += (img.step / 10) * 7;
+        if ( x == 0) { 
+            i += (img.step / 10) * 6;
         } else  {
             // at the right side
-            if (img.data[i] == white_pixel) {
+            if (img.data[i] == white_pixel && img.data[i+1] == white_pixel && img.data[i+2] == white_pixel) {
                 stop = false;
                 ROS_INFO_STREAM("right side, turn right!");
-                drive_robot(0.0, -0.1);
-                break;
+                drive_robot(0.0, -0.3);
+                return;
             } 
         }
     }
@@ -79,14 +79,14 @@ void process_image_callback(const sensor_msgs::Image img)
         x = i % img.step;
         if ( x < left_threshold) { 
             // at the left side
-            if (img.data[i] == white_pixel) {
+            if (img.data[i] == white_pixel && img.data[i+1] == white_pixel && img.data[i+2] == white_pixel) {
                 stop = false;
                 ROS_INFO_STREAM("left side, turn left!");
-                drive_robot(0.0, 0.1);
-                break;
+                drive_robot(0.0, 0.3);
+                return;
             } 
         } else {
-            i += (img.step / 10) * 7;          
+            i += (img.step / 10) * 6;          
         }
     }
 

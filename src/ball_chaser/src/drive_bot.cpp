@@ -27,7 +27,7 @@ bool handle_drive_request(ball_chaser::DriveToTarget::Request& req,
     
 
     // Wait 3 seconds for rbot to settle
-    ros::Duration(3).sleep();
+    //ros::Duration(3).sleep(); // remove the time delay to avoid overshooting the white ball
 
     // Return a response message
     res.msg_feedback = "DriveToTarget CMD - Linear X: " + std::to_string(motor_command.linear.x) 
