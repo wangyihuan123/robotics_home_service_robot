@@ -1,5 +1,5 @@
 # udacity_catkin_ws
 
-practice on ROS Essentials
+practice on Ros Localization
 
-project2:go chase it!
+project3: Where Am I
