@@ -14,8 +14,8 @@
     <param name="global_frame_id" value="map"/>
 
     <!-- If you choose to define initial pose here -->
-    <param name="initial_pose_x" value="-125"/>
-    <param name="initial_pose_y" value="-125"/>
+    <param name="initial_pose_x" value="10"/>
+    <param name="initial_pose_y" value="24"/>
 </node>
 
  <!-- Move Base -->
