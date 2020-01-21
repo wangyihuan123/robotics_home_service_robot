@@ -1,5 +1,5 @@
 # udacity_catkin_ws
 
-practice on Ros Localization
+practice on Ros Mapping and SLAM
 
-project3: Where Am I
+project4: Map my world
