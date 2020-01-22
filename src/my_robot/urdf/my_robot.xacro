@@ -13,7 +13,7 @@
   <link name="camera_link_optical">
   </link>
 
-  
+
   <link name="robot_footprint"></link>
 
   <joint name="robot_footprint_joint" type="fixed">
@@ -173,7 +173,6 @@
     </geometry>
   </visual>
 </link>
-
 
 
 <link name='camera'>
