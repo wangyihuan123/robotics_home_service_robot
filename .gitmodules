@@ -7,3 +7,6 @@
 [submodule "src/turtlebot_interactions"]
 	path = src/turtlebot_interactions
 	url = /home/kerry/catkin_ws/src/turtlebot_interactions
+[submodule "src/turtlebot_simulator"]
+	path = src/turtlebot_simulator
+	url = /home/kerry/catkin_ws/src/turtlebot_simulator
