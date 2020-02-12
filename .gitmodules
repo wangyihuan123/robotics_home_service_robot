@@ -1,0 +1,3 @@
+[submodule "src/slam_gmapping"]
+	path = src/slam_gmapping
+	url = /home/kerry/catkin_ws/src/slam_gmapping
