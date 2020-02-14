@@ -73,27 +73,77 @@ void displayVirtualObject(ros::Publisher marker_pub,
     return;
 }
 
-void chatterCallback(const nav_msgs::Odometry::ConstPtr& msg)
-{
+void chatterCallback(const nav_msgs::Odometry::ConstPtr &msg) {
     ROS_INFO("Seq: [%d]", msg->header.seq);
-    ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", msg->pose.pose.position.x,msg->pose.pose.position.y, msg->pose.pose.position.z);
-    ROS_INFO("Orientation-> x: [%f], y: [%f], z: [%f], w: [%f]", msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
-    ROS_INFO("Vel-> Linear: [%f], Angular: [%f]", msg->twist.twist.linear.x,msg->twist.twist.angular.z);
+    ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", msg->pose.pose.position.x, msg->pose.pose.position.y,
+             msg->pose.pose.position.z);
+    ROS_INFO("Orientation-> x: [%f], y: [%f], z: [%f], w: [%f]", msg->pose.pose.orientation.x,
+             msg->pose.pose.orientation.y, msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
+    ROS_INFO("Vel-> Linear: [%f], Angular: [%f]", msg->twist.twist.linear.x, msg->twist.twist.angular.z);
 }
+
+
+class Listener {
+public:
+    Listener(ros::Publisher publisher): marker_publisher(publisher){};
+
+    void callback(const nav_msgs::Odometry::ConstPtr &msg) {
+        float pickup_position_x = -2.0;
+        float pickup_position_y = 0.0;
+        float pickup_position_z = 0.0;
+
+        float pickup_orientation_x = 0.0;
+        float pickup_orientation_y = 0.0;
+        float pickup_orientation_z = 0.0;
+        float pickup_orientation_w = 1.0;
+
+        float color_alpha;
+        int duration;
+//    int state = 0;
+
+        if (fabs(msg->pose.pose.position.x - pickup_position_x) < 0.2 &&
+            fabs(msg->pose.pose.position.y - pickup_position_y) < 0.2 &&
+            fabs(msg->pose.pose.position.z - pickup_position_z) < 0.2) {
+            // arrive pick up zone, hide the object
+            if (object_state_ == 0) {
+                color_alpha = 0.0; // transparency
+                duration = 0;
+                displayVirtualObject(this->marker_publisher, "Robot picked up the object", duration, color_alpha, -2);
+                object_state_ = 1;
+            }
+        }
+
+        // debug
+//    ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", msg->pose.pose.position.x, msg->pose.pose.position.y,
+//             msg->pose.pose.position.z);
+//    ROS_INFO("Orientation-> x: [%f], y: [%f], z: [%f], w: [%f]", msg->pose.pose.orientation.x,
+//             msg->pose.pose.orientation.y, msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
+    }
+
+private:
+    int object_state_ = 0;  // 0:init, 1:pick up, 2: drop off
+    ros::Publisher marker_publisher;
+
+};
 
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "add_markers");
     ros::NodeHandle n;
     ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 1);
+    int duration = 0; // seconds, 0: forever
+    float color_alpha = 1.0; // not transparent at all
+
+    displayVirtualObject(marker_pub, "Robot is travelling to the pick up zone", duration, color_alpha, -2);
 
     // from subscriber tutorial:
     // http://wiki.ros.org/evarobot_odometry/Tutorials/indigo/Writing%20a%20Simple%20Subscriber%20for%20Odometry
-    ros::Subscriber sub = n.subscribe("odom", 1000, chatterCallback);
+    // http://wiki.ros.org/roscpp_tutorials/Tutorials/UsingClassMethodsAsCallbacks
+    Listener listener(marker_pub);
+    ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::callback, &listener);
     ros::spin();
 
-//    int duration = 5; // seconds
-//    float color_alpha = 1.0;
+
 //    displayVirtualObject(marker_pub, "Robot is travelling to the pick up zone", duration, color_alpha, -2);
 //    sleep(5);
 //
