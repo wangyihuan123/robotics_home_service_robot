@@ -1,5 +1,7 @@
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
+#include "nav_msgs/Odometry.h"
+
 
 void displayVirtualObject(ros::Publisher marker_pub,
                           const char *info,
@@ -71,25 +73,40 @@ void displayVirtualObject(ros::Publisher marker_pub,
     return;
 }
 
+void chatterCallback(const nav_msgs::Odometry::ConstPtr& msg)
+{
+    ROS_INFO("Seq: [%d]", msg->header.seq);
+    ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", msg->pose.pose.position.x,msg->pose.pose.position.y, msg->pose.pose.position.z);
+    ROS_INFO("Orientation-> x: [%f], y: [%f], z: [%f], w: [%f]", msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
+    ROS_INFO("Vel-> Linear: [%f], Angular: [%f]", msg->twist.twist.linear.x,msg->twist.twist.angular.z);
+}
+
+
 int main(int argc, char **argv) {
     ros::init(argc, argv, "add_markers");
     ros::NodeHandle n;
     ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 1);
 
-    int duration = 5; // seconds
-    float color_alpha = 1.0;
-    displayVirtualObject(marker_pub, "Robot is travelling to the pick up zone", duration, color_alpha, -2);
-    sleep(5);
+    // from subscriber tutorial:
+    // http://wiki.ros.org/evarobot_odometry/Tutorials/indigo/Writing%20a%20Simple%20Subscriber%20for%20Odometry
+    ros::Subscriber sub = n.subscribe("odom", 1000, chatterCallback);
+    ros::spin();
 
-    // after object duration, hide the object for 5 seconds
-    ROS_INFO("Robot is travelling to the drop off zone");
-    sleep(5);
+//    int duration = 5; // seconds
+//    float color_alpha = 1.0;
+//    displayVirtualObject(marker_pub, "Robot is travelling to the pick up zone", duration, color_alpha, -2);
+//    sleep(5);
+//
+//    // after object duration, hide the object for 5 seconds
+//    ROS_INFO("Robot is travelling to the drop off zone");
+//    sleep(5);
+//
+//    duration = 0; // object last forever
+//    displayVirtualObject(marker_pub, "Robot drop off the object", duration, color_alpha, 1);
 
-    duration = 0; // object last forever
-    displayVirtualObject(marker_pub, "Robot drop off the object", duration, color_alpha, 1);
-
-    while (true)
-        sleep(10);
+//    while (true) {
+//        sleep(10);
+//    }
 
     return 0;
 
