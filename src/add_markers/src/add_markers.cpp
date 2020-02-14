@@ -1,15 +1,13 @@
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
-//#include <nav_msg/Odometry.h>
-
-//void callbackFunc(const nav_msg);
 
 void displayVirtualObject(ros::Publisher marker_pub,
-                          const char* info,
-                        float color_a = 1.0,
-                        float pos_x = 0.0, float pos_y = 0.0,
-                        float o_x = 0.0, float o_y = 0.0, float o_z = 0.0, float o_w = 1.0
-                        ) {
+                          const char *info,
+                          int duration,
+                          float color_a,
+                          float pos_x = 0.0, float pos_y = 0.0,
+                          float o_x = 0.0, float o_y = 0.0, float o_z = 0.0, float o_w = 1.0
+) {
 
     // Set our initial shape type to be a cube
     uint32_t shape = visualization_msgs::Marker::CUBE;
@@ -53,7 +51,11 @@ void displayVirtualObject(ros::Publisher marker_pub,
     marker.color.b = 0.0f;
     marker.color.a = color_a;
 
-    marker.lifetime = ros::Duration();
+    if (duration <= 0) {
+        marker.lifetime = ros::Duration();
+    } else {
+        marker.lifetime = ros::Duration(duration);
+    }
 
     // Publish the marker
     while (marker_pub.getNumSubscribers() < 1) {
@@ -72,15 +74,17 @@ void displayVirtualObject(ros::Publisher marker_pub,
 int main(int argc, char **argv) {
     ros::init(argc, argv, "add_markers");
     ros::NodeHandle n;
-//    ros::Rate r(0.2); // 1/5 => 5sec
     ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 1);
 
-    while(true) {
-        displayVirtualObject(marker_pub, "display", 1.0);
+    while (true) {
+        int duration = 5; // seconds
+        float transparency = 0.0;
+        float color_alpha = 1.0 - transparency;
+        displayVirtualObject(marker_pub, "display", duration, color_alpha);
         sleep(5);
 
-        // hide the object for 5 seconds
-        displayVirtualObject(marker_pub, "hide", 0.0);
+        // after object duration, hide the object for 5 seconds
+        ROS_INFO("hide");
         sleep(5);
     }
 
