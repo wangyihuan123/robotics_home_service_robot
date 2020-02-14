@@ -76,18 +76,21 @@ int main(int argc, char **argv) {
     ros::NodeHandle n;
     ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 1);
 
-    while (true) {
-        int duration = 5; // seconds
-        float transparency = 0.0;
-        float color_alpha = 1.0 - transparency;
-        displayVirtualObject(marker_pub, "display", duration, color_alpha);
-        sleep(5);
+    int duration = 5; // seconds
+    float color_alpha = 1.0;
+    displayVirtualObject(marker_pub, "Robot is travelling to the pick up zone", duration, color_alpha, -2);
+    sleep(5);
 
-        // after object duration, hide the object for 5 seconds
-        ROS_INFO("hide");
-        sleep(5);
-    }
+    // after object duration, hide the object for 5 seconds
+    ROS_INFO("Robot is travelling to the drop off zone");
+    sleep(5);
 
+    duration = 0; // object last forever
+    displayVirtualObject(marker_pub, "Robot drop off the object", duration, color_alpha, 1);
+
+    while (true)
+        sleep(10);
+    
     return 0;
 
 }
