@@ -58,8 +58,8 @@ public:
         if (state_ != 1) {
             return;
         }
-        if (fabs(msg->pose.pose.position.x - this->goal_x_) < 0.07 &&
-            fabs(msg->pose.pose.position.y - this->goal_y_) < 0.07) {
+        if (fabs(msg->pose.pose.position.x - this->goal_x_) < this->distance_error &&
+            fabs(msg->pose.pose.position.y - this->goal_y_) < this->distance_error) {
             this->goal_x_  = -2.5;
             this->goal_y_  = 1.0;
 
@@ -70,19 +70,30 @@ public:
         } else {
             // todo: sorry, I can't handle this... feel frustrated.
             //  there are always some difference between the postion of action goal and position from odom
+            /* question
+            In pick_objects, suppose we set the goal (x, y, z) as (1, 1, 0) for example.
+            Then after the goal has been sent and the result is successful, should we expect that the robot should be at the place (1, 1, 0)?
+            However, if we subscribe from /odom and we can find that the robot's position is not (1, 1, 0).
+            How can I deal with this?
+             I tried to send the new goal to adjust robot's position, or set a large buffer(if robot is nearby I regard it arrive).
+             But these may cause add_marker does not synchronize with pick_objects( eg, object disappear but robot hasn't arrived yet)
+             Is this the right way to synchronize the action between add_mark and pick_objects based on odometry data?
 
-//            // although movebase finished the action, robot may still not reach the goal place.
-//            // I personally trust odom more. So, need to send the adjust goal to make sure the robot get the destination.
-//            // So, the new goal = goal - (odom - goal) = goal * 2 - odom
-            this->goal_x_  = this->origin_goal_x_ - msg->pose.pose.position.x + this->origin_goal_x_;
-            this->goal_y_  = this->origin_goal_y_ - msg->pose.pose.position.y + this->origin_goal_y_;
-//
-//            ROS_INFO("goal-> x: [%f], y: [%f]",
-//                     this->goal_x_, this->goal_y_);
-//
-            char buff[50];
-            sprintf(buff, "adjusting new goal => x: %f, y: %f \n", this->goal_x_, this->goal_y_);
-            move(this->goal_x_, this->goal_y_, 1.0, buff, "adjustment done");
+             Another question is that when my robot moves, it always move around and around, like dancing, unless the map has been discovered before. How can I solve this?
+             */
+
+////            // although movebase finished the action, robot may still not reach the goal place.
+////            // I personally trust odom more. So, need to send the adjust goal to make sure the robot get the destination.
+////            // So, the new goal = goal - (odom - goal) = goal * 2 - odom
+//            this->goal_x_  = this->origin_goal_x_ - msg->pose.pose.position.x + this->origin_goal_x_;
+//            this->goal_y_  = this->origin_goal_y_ - msg->pose.pose.position.y + this->origin_goal_y_;
+////
+////            ROS_INFO("goal-> x: [%f], y: [%f]",
+////                     this->goal_x_, this->goal_y_);
+////
+//            char buff[50];
+//            sprintf(buff, "adjusting new goal => x: %f, y: %f \n", this->goal_x_, this->goal_y_);
+//            move(this->goal_x_, this->goal_y_, 1.0, buff, "adjustment done");
         }
 
     }
@@ -97,6 +108,7 @@ private:
     float origin_goal_y_ = 0.0;
     int state_;
     bool debug;
+    float distance_error = 0.3;
 };
 
 
@@ -143,14 +155,9 @@ int main(int argc, char **argv) {
 
     // todo: but still need to check the odom data, whether the robot is in the pick up zone or not
     // otherwise, add_marker and pick_object can not synchronize the action.
-
-//    // method 1: use bind to add additional params for callback(fail)
-//    int test = 3;
-//    ros::Subscriber sub = n.subscribe("odom", 10, boost::bind(callbackFunc, _1, test)); // compile error, why??
-
     // method 2: use class to add additional parameters for callback
     Listener listener(&ac);
-    ros::Subscriber sub = n.subscribe("odom", 10, &Listener::odomCallback, &listener);
+    ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::odomCallback, &listener);
 
     ros::spin();
 

@@ -112,25 +112,25 @@ public:
         int duration;
 
         if (debug) {
-//            debug_print(msg);
-            if (object_state_ == 0) {
-            ROS_INFO("Distance to pick up-> x: [%f], y: [%f], z: [%f]",
-                     fabs(msg->pose.pose.position.x - pickup_position_x),
-                     fabs(msg->pose.pose.position.y - pickup_position_y),
-                     fabs(msg->pose.pose.position.z - pickup_position_z));
-
-            } else if ( object_state_ == 1) {
-                ROS_INFO("Distance to drop off-> x: [%f], y: [%f], z: [%f]",
-                         fabs(msg->pose.pose.position.x - dropoff_position_x),
-                         fabs(msg->pose.pose.position.y - dropoff_position_y),
-                         fabs(msg->pose.pose.position.z - dropoff_position_z));
-            }
+            debug_print(msg);
+//            if (object_state_ == 0) {
+//            ROS_INFO("Distance to pick up-> x: [%f], y: [%f], z: [%f]",
+//                     fabs(msg->pose.pose.position.x - pickup_position_x),
+//                     fabs(msg->pose.pose.position.y - pickup_position_y),
+//                     fabs(msg->pose.pose.position.z - pickup_position_z));
+//
+//            } else if ( object_state_ == 1) {
+//                ROS_INFO("Distance to drop off-> x: [%f], y: [%f], z: [%f]",
+//                         fabs(msg->pose.pose.position.x - dropoff_position_x),
+//                         fabs(msg->pose.pose.position.y - dropoff_position_y),
+//                         fabs(msg->pose.pose.position.z - dropoff_position_z));
+//            }
         }
 
         // check pick up zone
-        if (fabs(msg->pose.pose.position.x - pickup_position_x) < 0.1 &&
-            fabs(msg->pose.pose.position.y - pickup_position_y) < 0.1 &&
-            fabs(msg->pose.pose.position.z - pickup_position_z) < 0.1) {
+        if (fabs(msg->pose.pose.position.x - pickup_position_x) < this->distance_error &&
+            fabs(msg->pose.pose.position.y - pickup_position_y) < this->distance_error &&
+            fabs(msg->pose.pose.position.z - pickup_position_z) < this->distance_error) {
             // arrive pick up zone, hide the object
             ROS_INFO("state: %d", object_state_);
             if (object_state_ == 0) {
@@ -143,9 +143,9 @@ public:
         }
 
         // check drop off zone
-        if (fabs(msg->pose.pose.position.x - dropoff_position_x) < 0.1 &&
-            fabs(msg->pose.pose.position.y - dropoff_position_y) < 0.1 &&
-            fabs(msg->pose.pose.position.z - dropoff_position_z) < 0.1) {
+        if (fabs(msg->pose.pose.position.x - dropoff_position_x) < this->distance_error &&
+            fabs(msg->pose.pose.position.y - dropoff_position_y) < this->distance_error &&
+            fabs(msg->pose.pose.position.z - dropoff_position_z) < this->distance_error) {
 
             ROS_INFO("In drop off  - state: %d", object_state_);
             // arrive pick up zone, hide the object
@@ -163,6 +163,7 @@ public:
 private:
     int object_state_;  // 0:init, 1:pick up, 2: drop off
     ros::Publisher marker_publisher;
+    float distance_error = 0.3;
 
 };
 
@@ -180,7 +181,7 @@ int main(int argc, char **argv) {
     // http://wiki.ros.org/evarobot_odometry/Tutorials/indigo/Writing%20a%20Simple%20Subscriber%20for%20Odometry
     // http://wiki.ros.org/roscpp_tutorials/Tutorials/UsingClassMethodsAsCallbacks
     Listener listener(marker_pub);
-    ros::Subscriber sub = n.subscribe("odom", 10, &Listener::callback, &listener);
+    ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::callback, &listener);
     ros::spin();
 
 
