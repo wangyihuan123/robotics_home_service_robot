@@ -163,7 +163,7 @@ public:
 private:
     int object_state_;  // 0:init, 1:pick up, 2: drop off
     ros::Publisher marker_publisher;
-    float distance_error = 0.3;
+    float distance_error = 0.7;
 
 };
 
