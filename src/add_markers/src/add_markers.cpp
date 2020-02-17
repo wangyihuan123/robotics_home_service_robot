@@ -43,9 +43,9 @@ void displayVirtualObject(ros::Publisher marker_pub,
     marker.pose.orientation.w = o_w;
 
     // Set the scale of the marker -- 1x1x1 here means 1m on a side
-    marker.scale.x = 0.5;
-    marker.scale.y = 0.5;
-    marker.scale.z = 0.5;
+    marker.scale.x = 0.4;
+    marker.scale.y = 0.4;
+    marker.scale.z = 0.4;
 
     // Set the color -- be sure to set alpha to something non-zero!
     marker.color.r = 0.0f;
@@ -73,7 +73,7 @@ void displayVirtualObject(ros::Publisher marker_pub,
     return;
 }
 
-void chatterCallback(const nav_msgs::Odometry::ConstPtr &msg) {
+void debug_print(const nav_msgs::Odometry::ConstPtr &msg) {
     ROS_INFO("Seq: [%d]", msg->header.seq);
     ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", msg->pose.pose.position.x, msg->pose.pose.position.y,
              msg->pose.pose.position.z);
@@ -85,9 +85,11 @@ void chatterCallback(const nav_msgs::Odometry::ConstPtr &msg) {
 
 class Listener {
 public:
-    Listener(ros::Publisher publisher): marker_publisher(publisher){};
+    Listener(ros::Publisher publisher) : marker_publisher(publisher), object_state_(0) {};
 
     void callback(const nav_msgs::Odometry::ConstPtr &msg) {
+        bool debug = true;
+//        bool debug = false;
         float pickup_position_x = -2.0;
         float pickup_position_y = 0.0;
         float pickup_position_z = 0.0;
@@ -97,15 +99,42 @@ public:
         float pickup_orientation_z = 0.0;
         float pickup_orientation_w = 1.0;
 
+        float dropoff_position_x = -2.5;
+        float dropoff_position_y = 1;
+        float dropoff_position_z = 0.0;
+
+        float dropoff_orientation_x = 0.0;
+        float dropoff_orientation_y = 0.0;
+        float dropoff_orientation_z = 0.0;
+        float dropoff_orientation_w = 1.0;
+
         float color_alpha;
         int duration;
-//    int state = 0;
 
-        if (fabs(msg->pose.pose.position.x - pickup_position_x) < 0.2 &&
-            fabs(msg->pose.pose.position.y - pickup_position_y) < 0.2 &&
-            fabs(msg->pose.pose.position.z - pickup_position_z) < 0.2) {
-            // arrive pick up zone, hide the object
+        if (debug) {
+//            debug_print(msg);
             if (object_state_ == 0) {
+            ROS_INFO("Distance to pick up-> x: [%f], y: [%f], z: [%f]",
+                     fabs(msg->pose.pose.position.x - pickup_position_x),
+                     fabs(msg->pose.pose.position.y - pickup_position_y),
+                     fabs(msg->pose.pose.position.z - pickup_position_z));
+
+            } else if ( object_state_ == 1) {
+                ROS_INFO("Distance to drop off-> x: [%f], y: [%f], z: [%f]",
+                         fabs(msg->pose.pose.position.x - dropoff_position_x),
+                         fabs(msg->pose.pose.position.y - dropoff_position_y),
+                         fabs(msg->pose.pose.position.z - dropoff_position_z));
+            }
+        }
+
+        // check pick up zone
+        if (fabs(msg->pose.pose.position.x - pickup_position_x) < 0.1 &&
+            fabs(msg->pose.pose.position.y - pickup_position_y) < 0.1 &&
+            fabs(msg->pose.pose.position.z - pickup_position_z) < 0.1) {
+            // arrive pick up zone, hide the object
+            ROS_INFO("state: %d", object_state_);
+            if (object_state_ == 0) {
+                ROS_INFO("Robot is in the pick up zone now.");
                 color_alpha = 0.0; // transparency
                 duration = 0;
                 displayVirtualObject(this->marker_publisher, "Robot picked up the object", duration, color_alpha, -2);
@@ -113,15 +142,26 @@ public:
             }
         }
 
-        // debug
-//    ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", msg->pose.pose.position.x, msg->pose.pose.position.y,
-//             msg->pose.pose.position.z);
-//    ROS_INFO("Orientation-> x: [%f], y: [%f], z: [%f], w: [%f]", msg->pose.pose.orientation.x,
-//             msg->pose.pose.orientation.y, msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
+        // check drop off zone
+        if (fabs(msg->pose.pose.position.x - dropoff_position_x) < 0.1 &&
+            fabs(msg->pose.pose.position.y - dropoff_position_y) < 0.1 &&
+            fabs(msg->pose.pose.position.z - dropoff_position_z) < 0.1) {
+
+            ROS_INFO("In drop off  - state: %d", object_state_);
+            // arrive pick up zone, hide the object
+            if (object_state_ == 1) {
+                color_alpha = 1.0;
+                duration = 0;
+                displayVirtualObject(this->marker_publisher, "Robot dropped off the object", duration, color_alpha,
+                                     -2.5, 1);
+                object_state_ = 2;
+            }
+        }
+
     }
 
 private:
-    int object_state_ = 0;  // 0:init, 1:pick up, 2: drop off
+    int object_state_;  // 0:init, 1:pick up, 2: drop off
     ros::Publisher marker_publisher;
 
 };
@@ -140,23 +180,9 @@ int main(int argc, char **argv) {
     // http://wiki.ros.org/evarobot_odometry/Tutorials/indigo/Writing%20a%20Simple%20Subscriber%20for%20Odometry
     // http://wiki.ros.org/roscpp_tutorials/Tutorials/UsingClassMethodsAsCallbacks
     Listener listener(marker_pub);
-    ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::callback, &listener);
+    ros::Subscriber sub = n.subscribe("odom", 10, &Listener::callback, &listener);
     ros::spin();
 
-
-//    displayVirtualObject(marker_pub, "Robot is travelling to the pick up zone", duration, color_alpha, -2);
-//    sleep(5);
-//
-//    // after object duration, hide the object for 5 seconds
-//    ROS_INFO("Robot is travelling to the drop off zone");
-//    sleep(5);
-//
-//    duration = 0; // object last forever
-//    displayVirtualObject(marker_pub, "Robot drop off the object", duration, color_alpha, 1);
-
-//    while (true) {
-//        sleep(10);
-//    }
 
     return 0;
 

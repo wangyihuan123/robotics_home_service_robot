@@ -1,5 +1,3 @@
-# udacity_catkin_ws
+# Home service robot
 
-practice on Ros Mapping and SLAM
-
-project4: Map my world
+practice on Ros path planning and navigation
