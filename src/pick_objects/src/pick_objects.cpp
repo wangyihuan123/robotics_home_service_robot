@@ -23,7 +23,7 @@ void debug_print(const nav_msgs::Odometry::ConstPtr &msg) {
 
 class Listener {
 public:
-    Listener(MoveBaseClient *ac) : ac_(ac), state_(0), goal_x_(-2), goal_y_(0), goal_z_(0), debug(false) {};
+    Listener(MoveBaseClient *ac, *sc) : ac_(ac), sc_(sc), state_(0), goal_x_(-2), goal_y_(0), goal_z_(0), debug(false) {};
 
     void stop() {
         this->ac_->cancelAllGoals();
@@ -54,6 +54,21 @@ public:
 //            ROS_INFO("The base failed to move forward 1 meter for some reason");
     }
 
+    bool operateObject(string req) {
+        add_markers::AddMarkers srv;
+        srv.request.str_request = req;
+        if (this->sc_.call(srv)) {
+//            std::cout << srv.response.str_response << std::endl;
+            ROS_INFO("Response: %s",  srv.response.str_response);
+            return true;
+        } else {
+            ROS_ERROR("Failed to call service add_markers");
+            return false;
+        }
+    }
+
+    bool hideObject()
+
     void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
         char buff[50];
         memset(buff, 0, sizeof(buff));
@@ -68,10 +83,19 @@ public:
                 this->state_++;
                 break;
             case 1: // on the way to pick up
-                debug_print(msg);
+                // debug_print(msg);
                 if (fabs(msg->pose.pose.position.x - this->goal_x_) < this->distance_error &&
                     fabs(msg->pose.pose.position.y - this->goal_y_) < this->distance_error) {
-                    this->stop();
+                    this->stop();  // whatever the goal has finished or not, stop all the actions,
+                                    // as according to the odom data we ready arrive the destination
+
+                    if (!this->operateObject("pickup"))  // pickup the object:tell other node add_markers to hide the object
+                    {
+                        // error? check or print debug?
+                        return;
+                    }
+
+                    // set drop off goal
                     this->goal_x_ = -2.5;
                     this->goal_y_ = 1.0;
 
@@ -89,8 +113,19 @@ public:
                 if (fabs(msg->pose.pose.position.x - this->goal_x_) < this->distance_error &&
                     fabs(msg->pose.pose.position.y - this->goal_y_) < this->distance_error) {
                     this->stop();
+
+                    if (!this->operateObject("dropoff"))  // pickup the object:tell other node add_markers to hide the object
+                    {
+                        // error? check or print debug?
+                        return;
+                    }
+
+                    ROS_INFO("All done");
+
                     state_++;
                 }
+                break;
+            default:
                 break;
         }
 
@@ -137,7 +172,8 @@ public:
     }
 
 private:
-    MoveBaseClient *ac_;
+    MoveBaseClient *ac_;  // action_client
+    ros::ServiceClient *sc_; // service_client
     float goal_x_;
     float goal_y_;
     float goal_z_;
@@ -163,10 +199,6 @@ int main(int argc, char **argv) {
     // 6. if robot arrives drop off zone, send another request to add_markers to display the object
     // 7. receive the response and print "done"
 
-        // The key point is how to communicate with add_marker
-        // However, I prefer service/client way
-        // http://wiki.ros.org/ROS/Tutorials/WritingServiceClient%28c%2B%2B%29
-        ros::ServiceClient client = n.serviceClient<add_markers::AddMarkers>("add_markers");
         add_markers::AddMarkers srv;
         srv.request.str_request = "hide";
         if (client.call(srv)) {
@@ -176,8 +208,6 @@ int main(int argc, char **argv) {
             ROS_ERROR("Failed to call service add_markers");
             return 1;
         }
-
-    return 0;
 
 
     //tell the action client that we want to spin a thread by default
@@ -192,7 +222,13 @@ int main(int argc, char **argv) {
     // todo: but still need to check the odom data, whether the robot is in the pick up zone or not
     // otherwise, add_marker and pick_object can not synchronize the action.
     // method 2: use class to add additional parameters for callback
-    Listener listener(&ac);
+
+
+    // The key point is how to communicate with add_marker
+    // However, I prefer service/client way
+    // http://wiki.ros.org/ROS/Tutorials/WritingServiceClient%28c%2B%2B%29
+    ros::ServiceClient client = n.serviceClient<add_markers::AddMarkers>("add_markers");
+    Listener listener(&ac, &client);
     ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::odomCallback, &listener);
 
     ros::spin();

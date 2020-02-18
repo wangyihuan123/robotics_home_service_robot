@@ -171,16 +171,46 @@ private:
 
 bool addMarkersCallback(add_markers::AddMarkers::Request  &req,
                         add_markers::AddMarkers::Response &res) {
-    if (req.str_request.compare("show"))
+    if (req.str_request.compare("pickup"))
         res.str_response = "done";
-    else if (req.str_request.compare("hide")) {
-        res.str_response = "ok";
+    else if (req.str_request.compare("dropoff")) {
+        res.str_response = "done";
     } else {
         res.str_response = "what";
     }
 
     return true;
 }
+
+
+class AddMarkers
+{
+private:
+    std_msgs::Float32 totalTorque;
+    ros::NodeHandle n;
+    ros::Subscriber subscription;
+    ros::Publisher publisher;
+    ros::ServiceServer service_server;
+public:
+
+    void AddMarkers(){
+        this->service_server = n.advertiseService("/omniROS/resetTotalTorque",&Torque::resetService,this);
+        this->subscription = this->n.subscribe("/omniROS/torque", 100,&Torque::callbackTorque,this);
+        this->publisher = this->n.advertise<std_msgs::Float32>("/omniROS/totalTorque", 100);
+    }
+
+    void callbackTorque(const geometry_msgs::Vector3Stamped::ConstPtr& torque)
+    {
+        this->totalTorque.data += std::abs(torque->vector.x);
+        this->publisher.publish(this->totalTorque);
+    }
+
+    void resetService(std_srvs::Empty::Request &req,std_srvs::Empty::Response &res){
+        //This is a service server that will reset the totalTorque, it's a function that takes a void as input and returns a void as an output
+        this->totalTorque.data=0.0;
+    }
+};
+
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "add_markers");
