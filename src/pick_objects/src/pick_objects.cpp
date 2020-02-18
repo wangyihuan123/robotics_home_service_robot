@@ -5,6 +5,8 @@
 #include "nav_msgs/Odometry.h"
 #include <functional> // std::bind
 #include <boost/assign/list_of.hpp>
+#include "std_msgs/String.h"
+#include "add_markers/AddMarkers.h" // many thanks for this: https://answers.ros.org/question/242427/how-to-use-a-service-defined-in-another-package/
 
 
 // Define a client for to send goal requests to the move_base server through a SimpleActionClient
@@ -23,7 +25,7 @@ class Listener {
 public:
     Listener(MoveBaseClient *ac) : ac_(ac), state_(0), goal_x_(-2), goal_y_(0), goal_z_(0), debug(false) {};
 
-    void stop(){
+    void stop() {
         this->ac_->cancelAllGoals();
     }
 
@@ -62,11 +64,11 @@ public:
             case 0: // init
                 memset(buff, 0, sizeof(buff));
                 sprintf(buff, "heading to pick up => x: %f, y: %f \n", this->goal_x_, this->goal_y_);
-                move(this->goal_x_, this->goal_y_, 1.0, buff, "pick up zone arrived");
+                move(this->goal_x_, this->goal_y_, -1.0, buff, "pick up zone arrived");
                 this->state_++;
                 break;
             case 1: // on the way to pick up
-                        debug_print(msg);
+                debug_print(msg);
                 if (fabs(msg->pose.pose.position.x - this->goal_x_) < this->distance_error &&
                     fabs(msg->pose.pose.position.y - this->goal_y_) < this->distance_error) {
                     this->stop();
@@ -152,6 +154,50 @@ int main(int argc, char **argv) {
     // Initialize the simple_navigation_goals node
     ros::init(argc, argv, "pick_objects");
     ros::NodeHandle n;
+
+    // 1. pick_object set pickup goal for robot
+    // 2. pick_object subscribe topic odom and check the postion
+    // 3. if robot arrives pick up zone, send a request to add_markers to hide the object
+    // 4. after pick_object receive the response (hide action done), set drop off goal for robot
+    // 5. wait and check position again
+    // 6. if robot arrives drop off zone, send another request to add_markers to display the object
+    // 7. receive the response and print "done"
+
+        // The key point is how to communicate with add_marker
+        // However, I prefer service/client way
+        // http://wiki.ros.org/ROS/Tutorials/WritingServiceClient%28c%2B%2B%29
+        ros::ServiceClient client = n.serviceClient<add_markers::AddMarkers>("add_markers");
+        add_markers::AddMarkers srv;
+        srv.request.str_request = "hide";
+        if (client.call(srv)) {
+            std::cout << srv.response.str_response << std::endl;
+            ROS_INFO("Response: %s",  srv.response.str_response);
+        } else {
+            ROS_ERROR("Failed to call service add_markers");
+            return 1;
+        }
+
+    return 0;
+//    // using publisher/subscriber
+//    // http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28c%2B%2B%29
+//    ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
+//
+//    int count{1};
+//    ros::Rate loop_rate(10);
+//
+//    while (ros::ok()) {
+//        std_msgs::String msg;
+//        std::stringstream ss;
+//        ss << "hello world " << count;
+//        msg.data = ss.str();
+//        chatter_pub.publish(msg);
+//        ROS_INFO("%s", msg.data.c_str());
+//
+//        ros::spinOnce();
+//
+//        loop_rate.sleep();
+//        ++count;
+//    }
 
     //tell the action client that we want to spin a thread by default
     MoveBaseClient ac("move_base", true);

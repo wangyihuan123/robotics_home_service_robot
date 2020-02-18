@@ -1,7 +1,8 @@
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
 #include "nav_msgs/Odometry.h"
-
+#include "std_msgs/String.h"
+#include "add_markers/AddMarkers.h" // also check this https://answers.ros.org/question/242427/how-to-use-a-service-defined-in-another-package/
 
 void displayVirtualObject(ros::Publisher marker_pub,
                           const char *info,
@@ -167,6 +168,24 @@ private:
 
 };
 
+// demo from ros tutorials
+void chatterCallback(const std_msgs::String::ConstPtr& msg)
+{
+    ROS_INFO("I heard: [%s]", msg->data.c_str());
+}
+
+bool addMarkersCallback(add_markers::AddMarkers::Request  &req,
+                        add_markers::AddMarkers::Response &res) {
+    if (req.str_request.compare("show"))
+        res.str_response = "done";
+    else if (req.str_request.compare("hide")) {
+        res.str_response = "ok";
+    } else {
+        res.str_response = "what";
+    }
+
+    return true;
+}
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "add_markers");
@@ -177,11 +196,19 @@ int main(int argc, char **argv) {
 
     displayVirtualObject(marker_pub, "Robot is travelling to the pick up zone", duration, color_alpha, -2);
 
+
+    ros::ServiceServer service = n.advertiseService("add_markers", addMarkersCallback);
+    ROS_INFO("Ready to add markers");
+
     // from subscriber tutorial:
     // http://wiki.ros.org/evarobot_odometry/Tutorials/indigo/Writing%20a%20Simple%20Subscriber%20for%20Odometry
     // http://wiki.ros.org/roscpp_tutorials/Tutorials/UsingClassMethodsAsCallbacks
-    Listener listener(marker_pub);
-    ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::callback, &listener);
+//    Listener listener(marker_pub);
+//    ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::callback, &listener);
+
+    // custom msg from pick_objects
+    ros::Subscriber sub = n.subscribe("chatter", 1000, chatterCallback);
+
     ros::spin();
 
 
