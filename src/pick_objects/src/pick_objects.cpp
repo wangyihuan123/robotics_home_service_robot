@@ -178,26 +178,7 @@ int main(int argc, char **argv) {
         }
 
     return 0;
-//    // using publisher/subscriber
-//    // http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28c%2B%2B%29
-//    ros::Publisher chatter_pub = n.advertise<std_msgs::String>("chatter", 1000);
-//
-//    int count{1};
-//    ros::Rate loop_rate(10);
-//
-//    while (ros::ok()) {
-//        std_msgs::String msg;
-//        std::stringstream ss;
-//        ss << "hello world " << count;
-//        msg.data = ss.str();
-//        chatter_pub.publish(msg);
-//        ROS_INFO("%s", msg.data.c_str());
-//
-//        ros::spinOnce();
-//
-//        loop_rate.sleep();
-//        ++count;
-//    }
+
 
     //tell the action client that we want to spin a thread by default
     MoveBaseClient ac("move_base", true);
