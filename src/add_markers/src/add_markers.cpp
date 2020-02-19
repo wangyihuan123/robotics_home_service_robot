@@ -36,7 +36,7 @@ public:
         if (!req.str_request.compare("pickup")) {
             float color_alpha = 0.0; // transparency
             float duration = 0;
-            this->displayVirtualObject("Robot picked up the object", duration, color_alpha, this->source_pose_);
+            this->displayVirtualObject("Robot start to pick up the object", duration, color_alpha, this->source_pose_);
 
             // wait for 5 second for simulate picking up action
             ROS_INFO("Picking up");
@@ -46,7 +46,7 @@ public:
         } else if (!req.str_request.compare("dropoff")) {
             float color_alpha = 1.0;
             float duration = 0;
-            this->displayVirtualObject("Robot dropped off the object", duration, color_alpha, this->destination_pose_);
+            this->displayVirtualObject("Robot start to drop off the object", duration, color_alpha, this->destination_pose_);
 
             // wait for 5 second for simulate dropping off action
             ROS_INFO("Dropping off");
