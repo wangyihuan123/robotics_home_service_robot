@@ -7,6 +7,7 @@
 #include <boost/assign/list_of.hpp>
 #include "std_msgs/String.h"
 #include "add_markers/AddMarkers.h" // many thanks for this: https://answers.ros.org/question/242427/how-to-use-a-service-defined-in-another-package/
+#include "geometry_msgs/Pose.h"
 
 
 // Define a client for to send goal requests to the move_base server through a SimpleActionClient
@@ -21,15 +22,59 @@ void debug_print(const nav_msgs::Odometry::ConstPtr &msg) {
     ROS_INFO("Vel-> Linear: [%f], Angular: [%f]", msg->twist.twist.linear.x, msg->twist.twist.angular.z);
 }
 
+void movebaseDoneCallback(void) {
+    ROS_INFO("movebaseDoneCallback");
+//        ROS_INFO("Finished in state [%s]", state.toString().c_str());
+//        ROS_INFO("Answer: %i", result->result);
+}
+
+void movebaseActiveCallback(void) {
+    ROS_INFO("movebaseActiveCallback");
+//        ROS_INFO("Finished in state [%s]", state.toString().c_str());
+//        ROS_INFO("Answer: %i", result->result);
+}
+
+void movebaseFeedbackCallback(void) {
+    ROS_INFO("movebaseFeedbackCallback");
+//        ROS_INFO("Finished in state [%s]", state.toString().c_str());
+//        ROS_INFO("Answer: %i", result->result);
+}
+
+
 class Listener {
 public:
-    Listener(MoveBaseClient *ac, *sc) : ac_(ac), sc_(sc), state_(0), goal_x_(-2), goal_y_(0), goal_z_(0), debug(false) {};
+    Listener(MoveBaseClient *ac, ros::ServiceClient *sc)
+            : ac_(ac), sc_(sc), robot_state_(0), distance_error(0.5), debug(false) {
+        // set the first goal for pick up zone:
+        goal_pose_.position.x = -2.0;
+        goal_pose_.position.y = 0;
+        goal_pose_.position.z = 0;
+        goal_pose_.orientation.x = 0;
+        goal_pose_.orientation.y = 0;
+        goal_pose_.orientation.z = 0;
+        goal_pose_.orientation.w = 1.0;
+    };
 
     void stop() {
         this->ac_->cancelAllGoals();
     }
 
-    void move(float x, float y, float w, char *start_print, char *end_print) {
+//    void doneCallback(const actionlib::SimpleClientGoalState &state
+//                      const move_base_msgs::MoveBaseActionResult &result) {
+//        ROS_INFO("Finished in state [%s]", state.toString().c_str());
+////        ROS_INFO("Answer: %i", result->result);
+//    }
+
+    void movebaseDoneCallback(void) {
+        ROS_INFO("movebaseDoneCallback");
+        if (robot_state_ == 1) {
+            startJob();
+        } else if (robot_state_ == 2) {
+            finishJob();
+        }
+    }
+
+    void move(const char *start_print, const char *end_print) {
         //////////////  send the goal  /////////////////
         move_base_msgs::MoveBaseGoal goal;
 
@@ -37,29 +82,24 @@ public:
         goal.target_pose.header.frame_id = "map";
         goal.target_pose.header.stamp = ros::Time::now();
 
-        goal.target_pose.pose.position.x = x;
-        goal.target_pose.pose.position.y = y;
-        goal.target_pose.pose.orientation.w = w;
-        ROS_INFO(start_print);
-        this->ac_->sendGoal(goal);
+        goal.target_pose.pose = this->goal_pose_;
 
-        // todo: don't wait for the result??!!
-//        this->ac_->waitForResult();
-//
-//        // Check if the robot reached its goal
-//        if (this->ac_->getState() == actionlib::SimpleClientGoalState::SUCCEEDED) {
-//            ROS_INFO(end_print);
-//
-//        } else
-//            ROS_INFO("The base failed to move forward 1 meter for some reason");
+        ROS_INFO("%s => x: %f, y: %f", start_print, this->goal_pose_.position.x, this->goal_pose_.position.y);
+
+        // callback
+        // http://wiki.ros.org/actionlib_tutorials/Tutorials/Writing%20a%20Callback%20Based%20Simple%20Action%20Client
+        this->ac_->sendGoal(goal, boost::bind(&Listener::movebaseDoneCallback, this));
+
+
     }
 
-    bool operateObject(string req) {
+    bool operateObject(const char *req) {
         add_markers::AddMarkers srv;
         srv.request.str_request = req;
-        if (this->sc_.call(srv)) {
-//            std::cout << srv.response.str_response << std::endl;
-            ROS_INFO("Response: %s",  srv.response.str_response);
+
+//        ROS_INFO("str_request: %s", srv.request.str_request.c_str());
+        if (this->sc_->call(srv)) {
+            ROS_INFO("Response: %s", srv.response.str_response.c_str()); // todo: warning
             return true;
         } else {
             ROS_ERROR("Failed to call service add_markers");
@@ -67,62 +107,69 @@ public:
         }
     }
 
-    bool hideObject()
+    void startJob(void) {
+        // pickup the object:tell add_markers node to hide the object
+        ROS_INFO("Picking up... (about 5 sec)");
+        if (this->operateObject("pickup") == false) {
+            // error? check or print debug?
+//            debug_print(msg);
+            return;
+        }
+
+        // set drop off goal
+        this->goal_pose_.position.x = -3.0;
+        this->goal_pose_.position.y = 1.5;
+        move("heading to drop off", "drop off zone arrived");
+        robot_state_++;
+        ROS_INFO("state: %d", robot_state_);
+    }
+
+    void finishJob(void) {
+        // pickup the object:tell add_markers node to show the object
+        ROS_INFO("Dropping off... (about 5 sec)");
+        if (this->operateObject("dropoff") == false) {
+            // error? check or print debug?
+            return;
+        }
+
+        ROS_INFO("Job done");
+
+        robot_state_++;
+        ROS_INFO("state: %d", this->robot_state_);
+    }
+
 
     void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
-        char buff[50];
-        memset(buff, 0, sizeof(buff));
-        sprintf(buff, "state: %d", this->state_);
-        ROS_INFO(buff);
+//        ROS_INFO("state: %d", this->robot_state_);
 
-        switch (state_) {
-            case 0: // init
-                memset(buff, 0, sizeof(buff));
-                sprintf(buff, "heading to pick up => x: %f, y: %f \n", this->goal_x_, this->goal_y_);
-                move(this->goal_x_, this->goal_y_, -1.0, buff, "pick up zone arrived");
-                this->state_++;
+        switch (robot_state_) {
+            case 0: // beginning, set goal to pick up zone
+//                memset(buff, 0, sizeof(buff));
+//                sprintf(buff, "heading to pick up => x: %f, y: %f", this->goal_pose_.position.x, this->goal_pose_.position.y);
+                move("heading to pick up", "pick up zone arrived");
+                this->robot_state_++;
+                ROS_INFO("state: %d", this->robot_state_);
                 break;
-            case 1: // on the way to pick up
+            case 1: // on the way to pick up zone
                 // debug_print(msg);
-                if (fabs(msg->pose.pose.position.x - this->goal_x_) < this->distance_error &&
-                    fabs(msg->pose.pose.position.y - this->goal_y_) < this->distance_error) {
+                if (fabs(msg->pose.pose.position.x - this->goal_pose_.position.x) < this->distance_error &&
+                    fabs(msg->pose.pose.position.y - this->goal_pose_.position.y) < this->distance_error) {
                     this->stop();  // whatever the goal has finished or not, stop all the actions,
-                                    // as according to the odom data we ready arrive the destination
+                    // as according to the odom data we ready arrive the destination
+                    startJob();
 
-                    if (!this->operateObject("pickup"))  // pickup the object:tell other node add_markers to hide the object
-                    {
-                        // error? check or print debug?
-                        return;
-                    }
-
-                    // set drop off goal
-                    this->goal_x_ = -2.5;
-                    this->goal_y_ = 1.0;
-
-                    memset(buff, 0, sizeof(buff));
-                    sprintf(buff, "heading to drop off => x: %f, y: %f \n", this->goal_x_, this->goal_y_);
-                    move(this->goal_x_, this->goal_y_, 1.0, buff, "drop off arrived");
-                    state_++;
                 }
                 break;
             case 2: // on the way to drop off
                 // todo: need to wait for display?? do this later
                 // on the way to drop off
                 // do nothing
-                debug_print(msg);
-                if (fabs(msg->pose.pose.position.x - this->goal_x_) < this->distance_error &&
-                    fabs(msg->pose.pose.position.y - this->goal_y_) < this->distance_error) {
+//                debug_print(msg);
+                if (fabs(msg->pose.pose.position.x - this->goal_pose_.position.x) < this->distance_error &&
+                    fabs(msg->pose.pose.position.y - this->goal_pose_.position.y) < this->distance_error) {
                     this->stop();
 
-                    if (!this->operateObject("dropoff"))  // pickup the object:tell other node add_markers to hide the object
-                    {
-                        // error? check or print debug?
-                        return;
-                    }
-
-                    ROS_INFO("All done");
-
-                    state_++;
+                    finishJob();
                 }
                 break;
             default:
@@ -130,59 +177,15 @@ public:
         }
 
         return;
-
-//        if (fabs(msg->pose.pose.position.x - this->goal_x_) < this->distance_error &&
-//            fabs(msg->pose.pose.position.y - this->goal_y_) < this->distance_error) {
-//            this->goal_x_ = -2.5;
-//            this->goal_y_ = 1.0;
-//
-//            memset(buff, 0, sizeof(buff));
-//            sprintf(buff, "heading to drop off => x: %f, y: %f \n", this->goal_x_, this->goal_y_);
-//            move(this->goal_x_, this->goal_y_, 1.0, buff, "drop off arrived");
-//            state_++;
-//        } else {
-//            // todo: sorry, I can't handle this... feel frustrated.
-//            //  there are always some difference between the postion of action goal and position from odom
-//            /* question
-//            In pick_objects, suppose we set the goal (x, y, z) as (1, 1, 0) for example.
-//            Then after the goal has been sent and the result is successful, should we expect that the robot should be at the place (1, 1, 0)?
-//            However, if we subscribe from /odom and we can find that the robot's position is not (1, 1, 0).
-//            How can I deal with this?
-//             I tried to send the new goal to adjust robot's position, or set a large buffer(if robot is nearby I regard it arrive).
-//             But these may cause add_marker does not synchronize with pick_objects( eg, object disappear but robot hasn't arrived yet)
-//             Is this the right way to synchronize the action between add_mark and pick_objects based on odometry data?
-//
-//             Another question is that when my robot moves, it always move around and around, like dancing, unless the map has been discovered before. How can I solve this?
-//             */
-//
-//////            // although movebase finished the action, robot may still not reach the goal place.
-//////            // I personally trust odom more. So, need to send the adjust goal to make sure the robot get the destination.
-//////            // So, the new goal = goal - (odom - goal) = goal * 2 - odom
-////            this->goal_x_  = this->origin_goal_x_ - msg->pose.pose.position.x + this->origin_goal_x_;
-////            this->goal_y_  = this->origin_goal_y_ - msg->pose.pose.position.y + this->origin_goal_y_;
-//////
-//////            ROS_INFO("goal-> x: [%f], y: [%f]",
-//////                     this->goal_x_, this->goal_y_);
-//////
-////            char buff[50];
-////            sprintf(buff, "adjusting new goal => x: %f, y: %f \n", this->goal_x_, this->goal_y_);
-////            move(this->goal_x_, this->goal_y_, 1.0, buff, "adjustment done");
-//        }
-
     }
 
 private:
-    MoveBaseClient *ac_;  // action_client
-    ros::ServiceClient *sc_; // service_client
-    float goal_x_;
-    float goal_y_;
-    float goal_z_;
-
-    float origin_goal_x_ = -2.0;
-    float origin_goal_y_ = 0.0;
-    int state_;
+    MoveBaseClient *ac_;
+    ros::ServiceClient *sc_;
+    geometry_msgs::Pose goal_pose_;
+    int robot_state_;  // 0:init, 1:on the way to pick up zone, 2: on the way to drop off zone, 3. none
     bool debug;
-    float distance_error = 0.7;
+    float distance_error;
 };
 
 
@@ -199,17 +202,6 @@ int main(int argc, char **argv) {
     // 6. if robot arrives drop off zone, send another request to add_markers to display the object
     // 7. receive the response and print "done"
 
-        add_markers::AddMarkers srv;
-        srv.request.str_request = "hide";
-        if (client.call(srv)) {
-            std::cout << srv.response.str_response << std::endl;
-            ROS_INFO("Response: %s",  srv.response.str_response);
-        } else {
-            ROS_ERROR("Failed to call service add_markers");
-            return 1;
-        }
-
-
     //tell the action client that we want to spin a thread by default
     MoveBaseClient ac("move_base", true);
 
@@ -217,6 +209,9 @@ int main(int argc, char **argv) {
     while (!ac.waitForServer(ros::Duration(5.0))) {
         ROS_INFO("Waiting for the move_base action server to come up");
     }
+
+    // important notes:
+    // Regard the robot as finished the goal if either ac_ return succeed or pose from odom == goal.pose
 
 
     // todo: but still need to check the odom data, whether the robot is in the pick up zone or not

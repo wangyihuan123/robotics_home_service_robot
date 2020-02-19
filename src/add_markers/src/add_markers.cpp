@@ -1,237 +1,161 @@
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
-#include "nav_msgs/Odometry.h"
+//#include "nav_msgs/Odometry.h"
 #include "std_msgs/String.h"
 #include "add_markers/AddMarkers.h" // also check this https://answers.ros.org/question/242427/how-to-use-a-service-defined-in-another-package/
+#include "geometry_msgs/Pose.h"
 
-void displayVirtualObject(ros::Publisher marker_pub,
-                          const char *info,
-                          int duration,
-                          float color_a,
-                          float pos_x = 0.0, float pos_y = 0.0,
-                          float o_x = 0.0, float o_y = 0.0, float o_z = 0.0, float o_w = 1.0
-) {
-
-    // Set our initial shape type to be a cube
-    uint32_t shape = visualization_msgs::Marker::CUBE;
-
-    // display object in pick up zone for 5 second
-    visualization_msgs::Marker marker;
-    // Set the frame ID and timestamp.  See the TF tutorials for information on these.
-    marker.header.frame_id = "/map";  // Fixed Frame in the rviz.
-    // Without this, rviz can't display the marker,
-    // although topic visualization_marker still has the info
-    marker.header.stamp = ros::Time::now();
-
-    // Set the namespace and id for this marker.  This serves to create a unique ID
-    // Any marker sent with the same namespace and id will overwrite the old one
-    marker.ns = "add_markers";
-    marker.id = 0;
-
-    // Set the marker type.  Initially this is CUBE, and cycles between that and SPHERE, ARROW, and CYLINDER
-    marker.type = shape;
-
-    // Set the marker action.  Options are ADD, DELETE, and new in ROS Indigo: 3 (DELETEALL)
-    marker.action = visualization_msgs::Marker::ADD;
-
-    // Set the pose of the marker.  This is a full 6DOF pose relative to the frame/time specified in the header
-    marker.pose.position.x = pos_x;
-    marker.pose.position.y = pos_y;
-    marker.pose.position.z = 0;
-    marker.pose.orientation.x = o_x;
-    marker.pose.orientation.y = o_y;
-    marker.pose.orientation.z = o_z;
-    marker.pose.orientation.w = o_w;
-
-    // Set the scale of the marker -- 1x1x1 here means 1m on a side
-    marker.scale.x = 0.4;
-    marker.scale.y = 0.4;
-    marker.scale.z = 0.4;
-
-    // Set the color -- be sure to set alpha to something non-zero!
-    marker.color.r = 0.0f;
-    marker.color.g = 1.0f;
-    marker.color.b = 0.0f;
-    marker.color.a = color_a;
-
-    if (duration <= 0) {
-        marker.lifetime = ros::Duration();
-    } else {
-        marker.lifetime = ros::Duration(duration);
-    }
-
-    // Publish the marker
-    while (marker_pub.getNumSubscribers() < 1) {
-        if (!ros::ok()) {
-            return;
-        }
-        ROS_WARN_ONCE("Please create a subscriber to the marker");
-        sleep(1);
-    }
-    ROS_INFO(info);
-    marker_pub.publish(marker);
-
-    return;
-}
-
-void debug_print(const nav_msgs::Odometry::ConstPtr &msg) {
-    ROS_INFO("Seq: [%d]", msg->header.seq);
-    ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", msg->pose.pose.position.x, msg->pose.pose.position.y,
-             msg->pose.pose.position.z);
-    ROS_INFO("Orientation-> x: [%f], y: [%f], z: [%f], w: [%f]", msg->pose.pose.orientation.x,
-             msg->pose.pose.orientation.y, msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
-    ROS_INFO("Vel-> Linear: [%f], Angular: [%f]", msg->twist.twist.linear.x, msg->twist.twist.angular.z);
-}
-
-
-class Listener {
-public:
-    Listener(ros::Publisher publisher) : marker_publisher(publisher), object_state_(0) {};
-
-    void callback(const nav_msgs::Odometry::ConstPtr &msg) {
-        bool debug = true;
-//        bool debug = false;
-        float pickup_position_x = -2.0;
-        float pickup_position_y = 0.0;
-        float pickup_position_z = 0.0;
-
-        float pickup_orientation_x = 0.0;
-        float pickup_orientation_y = 0.0;
-        float pickup_orientation_z = 0.0;
-        float pickup_orientation_w = 1.0;
-
-        float dropoff_position_x = -2.5;
-        float dropoff_position_y = 1;
-        float dropoff_position_z = 0.0;
-
-        float dropoff_orientation_x = 0.0;
-        float dropoff_orientation_y = 0.0;
-        float dropoff_orientation_z = 0.0;
-        float dropoff_orientation_w = 1.0;
-
-        float color_alpha;
-        int duration;
-
-        if (debug) {
-            debug_print(msg);
-//            if (object_state_ == 0) {
-//            ROS_INFO("Distance to pick up-> x: [%f], y: [%f], z: [%f]",
-//                     fabs(msg->pose.pose.position.x - pickup_position_x),
-//                     fabs(msg->pose.pose.position.y - pickup_position_y),
-//                     fabs(msg->pose.pose.position.z - pickup_position_z));
-//
-//            } else if ( object_state_ == 1) {
-//                ROS_INFO("Distance to drop off-> x: [%f], y: [%f], z: [%f]",
-//                         fabs(msg->pose.pose.position.x - dropoff_position_x),
-//                         fabs(msg->pose.pose.position.y - dropoff_position_y),
-//                         fabs(msg->pose.pose.position.z - dropoff_position_z));
-//            }
-        }
-
-        // check pick up zone
-        if (fabs(msg->pose.pose.position.x - pickup_position_x) < this->distance_error &&
-            fabs(msg->pose.pose.position.y - pickup_position_y) < this->distance_error &&
-            fabs(msg->pose.pose.position.z - pickup_position_z) < this->distance_error) {
-            // arrive pick up zone, hide the object
-            ROS_INFO("state: %d", object_state_);
-            if (object_state_ == 0) {
-                ROS_INFO("Robot is in the pick up zone now.");
-                color_alpha = 0.0; // transparency
-                duration = 0;
-                displayVirtualObject(this->marker_publisher, "Robot picked up the object", duration, color_alpha, -2);
-                object_state_ = 1;
-            }
-        }
-
-        // check drop off zone
-        if (fabs(msg->pose.pose.position.x - dropoff_position_x) < this->distance_error &&
-            fabs(msg->pose.pose.position.y - dropoff_position_y) < this->distance_error &&
-            fabs(msg->pose.pose.position.z - dropoff_position_z) < this->distance_error) {
-
-            ROS_INFO("In drop off  - state: %d", object_state_);
-            // arrive pick up zone, hide the object
-            if (object_state_ == 1) {
-                color_alpha = 1.0;
-                duration = 0;
-                displayVirtualObject(this->marker_publisher, "Robot dropped off the object", duration, color_alpha,
-                                     -2.5, 1);
-                object_state_ = 2;
-            }
-        }
-
-    }
-
+class AddMarkers {
 private:
-    int object_state_;  // 0:init, 1:pick up, 2: drop off
-    ros::Publisher marker_publisher;
-    float distance_error = 0.7;
-
-};
-
-
-bool addMarkersCallback(add_markers::AddMarkers::Request  &req,
-                        add_markers::AddMarkers::Response &res) {
-    if (req.str_request.compare("pickup"))
-        res.str_response = "done";
-    else if (req.str_request.compare("dropoff")) {
-        res.str_response = "done";
-    } else {
-        res.str_response = "what";
-    }
-
-    return true;
-}
-
-
-class AddMarkers
-{
-private:
-    std_msgs::Float32 totalTorque;
-    ros::NodeHandle n;
-    ros::Subscriber subscription;
-    ros::Publisher publisher;
-    ros::ServiceServer service_server;
+    ros::NodeHandle n_;
+    ros::Subscriber subscription_;
+    ros::Publisher publisher_;
+    ros::ServiceServer service_server_;
+    geometry_msgs::Pose source_pose_;
+    geometry_msgs::Pose destination_pose_;
+    int robot_state_;
 public:
 
-    void AddMarkers(){
-        this->service_server = n.advertiseService("/omniROS/resetTotalTorque",&Torque::resetService,this);
-        this->subscription = this->n.subscribe("/omniROS/torque", 100,&Torque::callbackTorque,this);
-        this->publisher = this->n.advertise<std_msgs::Float32>("/omniROS/totalTorque", 100);
+    AddMarkers(geometry_msgs::Pose source_pose, geometry_msgs::Pose destination_pose) :
+            source_pose_(source_pose), destination_pose_(destination_pose), robot_state_(0) {
+        this->service_server_ = this->n_.advertiseService("add_markers", &AddMarkers::addMarkersCallback, this);
+//        this->subscription_ = this->n_.subscribe("odom", 1000, &AddMarkers::odomCallback, this);  // no need odom any more 
+        this->publisher_ = this->n_.advertise<visualization_msgs::Marker>("visualization_marker", 1);
     }
 
-    void callbackTorque(const geometry_msgs::Vector3Stamped::ConstPtr& torque)
-    {
-        this->totalTorque.data += std::abs(torque->vector.x);
-        this->publisher.publish(this->totalTorque);
+    void setObjectDefault() {
+        float duration = 0;
+        float color_alpha = 1.0;
+        displayVirtualObject( "Markers are ready", duration, color_alpha, this->source_pose_);
     }
 
-    void resetService(std_srvs::Empty::Request &req,std_srvs::Empty::Response &res){
-        //This is a service server that will reset the totalTorque, it's a function that takes a void as input and returns a void as an output
-        this->totalTorque.data=0.0;
+    bool addMarkersCallback(add_markers::AddMarkers::Request &req,
+                            add_markers::AddMarkers::Response &res) {
+//        ROS_INFO(" request: %s", req.str_request.c_str());
+
+        if (!req.str_request.compare("pickup")) {
+            float color_alpha = 0.0; // transparency
+            float duration = 0;
+            this->displayVirtualObject("Robot picked up the object", duration, color_alpha, this->source_pose_);
+
+            // wait for 5 second for simulate picking up action
+            ROS_INFO("Picking up");
+            ros::Duration(5).sleep();
+
+            res.str_response = "done";
+        } else if (!req.str_request.compare("dropoff")) {
+            float color_alpha = 1.0;
+            float duration = 0;
+            this->displayVirtualObject("Robot dropped off the object", duration, color_alpha, this->destination_pose_);
+
+            // wait for 5 second for simulate dropping off action
+            ROS_INFO("Dropping off");
+            ros::Duration(5).sleep();
+
+            res.str_response = "done";
+        } else {
+            res.str_response = "what";
+            ROS_INFO("Unknown request: %s", req.str_request.c_str());  // todo: warning
+        }
+
+        return true;
     }
+
+    // don't need read odom from add_markers any more.
+//    void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
+//    }
+
+
+    void displayVirtualObject(
+            const char *info,
+            int duration,
+            float color_a,
+            geometry_msgs::Pose pose
+    ) {
+
+        // Set our initial shape type to be a cube
+        uint32_t shape = visualization_msgs::Marker::CUBE;
+
+        // display object in pick up zone for 5 second
+        visualization_msgs::Marker marker;
+        // Set the frame ID and timestamp.  See the TF tutorials for information on these.
+        marker.header.frame_id = "/map";  // Fixed Frame in the rviz.
+        // Without this, rviz can't display the marker,
+        // although topic visualization_marker still has the info
+        marker.header.stamp = ros::Time::now();
+
+        // Set the namespace and id for this marker.  This serves to create a unique ID
+        // Any marker sent with the same namespace and id will overwrite the old one
+        marker.ns = "add_markers";
+        marker.id = 0;
+
+        // Set the marker type.  Initially this is CUBE, and cycles between that and SPHERE, ARROW, and CYLINDER
+        marker.type = shape;
+
+        // Set the marker action.  Options are ADD, DELETE, and new in ROS Indigo: 3 (DELETEALL)
+        marker.action = visualization_msgs::Marker::ADD;
+
+        // Set the pose of the marker.  This is a full 6DOF pose relative to the frame/time specified in the header
+        marker.pose = pose;
+
+        // default setting
+        // Set the scale of the marker -- 1x1x1 here means 1m on a side
+        marker.scale.x = 0.4;
+        marker.scale.y = 0.4;
+        marker.scale.z = 0.4;
+
+        // Set the color -- be sure to set alpha to something non-zero!
+        marker.color.r = 0.0f;
+        marker.color.g = 1.0f;
+        marker.color.b = 0.0f;
+        marker.color.a = color_a;
+
+        if (duration <= 0) {
+            marker.lifetime = ros::Duration();
+        } else {
+            marker.lifetime = ros::Duration(duration);
+        }
+
+        // Publish the marker
+        while (this->publisher_.getNumSubscribers() < 1) {
+            if (!ros::ok()) {
+                return;
+            }
+            ROS_WARN_ONCE("Please create a subscriber to the marker");
+            sleep(1);
+        }
+        ROS_INFO(info);
+        this->publisher_.publish(marker);
+
+        return;
+    }
+
+
 };
 
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "add_markers");
-    ros::NodeHandle n;
-    ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 1);
-    int duration = 0; // seconds, 0: forever
-    float color_alpha = 1.0; // not transparent at all
+    geometry_msgs::Pose pickup_pose, dropoff_pose;
 
-    displayVirtualObject(marker_pub, "Robot is travelling to the pick up zone", duration, color_alpha, -2);
+    pickup_pose.position.x = -2.0;
+    pickup_pose.position.y = 0;
+    pickup_pose.position.z = 0;
+    pickup_pose.orientation.x = 0;
+    pickup_pose.orientation.y = 0;
+    pickup_pose.orientation.z = 0;
+    pickup_pose.orientation.w = 1.0;
 
+    dropoff_pose.position.x = -3.0;
+    dropoff_pose.position.y = 1.5;
+    dropoff_pose.position.z = 0;
+    dropoff_pose.orientation.x = 0;
+    dropoff_pose.orientation.y = 0;
+    dropoff_pose.orientation.z = 0;
+    dropoff_pose.orientation.w = 1.0;
 
-    ros::ServiceServer service = n.advertiseService("add_markers", addMarkersCallback);
-    ROS_INFO("Ready to add markers");
-
-    // from subscriber tutorial:
-    // http://wiki.ros.org/evarobot_odometry/Tutorials/indigo/Writing%20a%20Simple%20Subscriber%20for%20Odometry
-    // http://wiki.ros.org/roscpp_tutorials/Tutorials/UsingClassMethodsAsCallbacks
-//    Listener listener(marker_pub);
-//    ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::callback, &listener);
-
-
+    AddMarkers addmarkers_node(pickup_pose, dropoff_pose);
+    addmarkers_node.setObjectDefault();
     ros::spin();
 
 
