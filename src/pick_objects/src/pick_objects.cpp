@@ -23,20 +23,25 @@ void debug_print(const nav_msgs::Odometry::ConstPtr &msg) {
 }
 
 enum class Home_Service_State {
-    BEGIN,
-//    SET_SOURCE_GOAL,
-    ON_THE_WAY_TO_SOURCE_GOAL,
-    REACH_SOURCE_GOAL,
+    BEGIN = 0,
+    ON_THE_WAY_TO_PICKUP_ZONE,
     START_PICKING_UP,
     FINISH_PICKING_UP,
-//    SET_DESTINATION_GOAL,
-    ON_THE_WAY_TO_DESTINATION_GOAL,
-    REACH_DESTINATION_GOAL,
+    ON_THE_WAY_TO_DROPOFF_ZONE,
     START_DROPPING_OFF,
     FINISH_DROPPING_OFF,
     END
-
 };
+std::string robot_state_str_[] = {
+        "BEGIN",
+        "ON_THE_WAY_TO_PICKUP_ZONE",
+        "START_PICKING_UP",
+        "FINISH_PICKING_UP",
+        "ON_THE_WAY_TO_DROPOFF_ZONE",
+        "START_DROPPING_OFF",
+        "FINISH_DROPPING_OFF",
+        "END"};
+
 
 class Listener {
 public:
@@ -61,10 +66,10 @@ public:
 
     void movebaseDoneCallback(void) {
         ROS_INFO("movebaseDoneCallback");
-        if (robot_state_ == Home_Service_State::ON_THE_WAY_TO_SOURCE_GOAL) {
+        if (robot_state_ == Home_Service_State::ON_THE_WAY_TO_PICKUP_ZONE) {
             clear();
             startJob();
-        } else if (robot_state_ == Home_Service_State::ON_THE_WAY_TO_DESTINATION_GOAL) {
+        } else if (robot_state_ == Home_Service_State::ON_THE_WAY_TO_DROPOFF_ZONE) {
             clear();
             finishJob();
         }
@@ -117,8 +122,8 @@ public:
         this->goal_pose_.position.x = -3.0;
         this->goal_pose_.position.y = 1.5;
         move("heading to drop off", "drop off zone arrived");
-        robot_state_ = Home_Service_State::ON_THE_WAY_TO_DESTINATION_GOAL;
-        ROS_INFO("state: %d", robot_state_);
+        robot_state_ = Home_Service_State::ON_THE_WAY_TO_DROPOFF_ZONE;
+        printCurrentState();
     }
 
     void finishJob(void) {
@@ -135,28 +140,28 @@ public:
     }
 
     void printCurrentState(void) {
-        ROS_INFO("state: %d", this->robot_state_);
+        ROS_INFO("state: %s", robot_state_str_[static_cast<int>(robot_state_)].c_str());
     }
 
     void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
-//        ROS_INFO("state: %d", this->robot_state_);
+//        printCurrentState();
 
         switch (robot_state_) {
             case Home_Service_State::BEGIN : // beginning, set goal to pick up zone
                 move("heading to pick up", "pick up zone arrived");
-                this->robot_state_ = Home_Service_State ::ON_THE_WAY_TO_SOURCE_GOAL;
-                ROS_INFO("state: %d", this->robot_state_);
+                this->robot_state_ = Home_Service_State::ON_THE_WAY_TO_PICKUP_ZONE;
+                printCurrentState();
                 break;
-            case Home_Service_State::ON_THE_WAY_TO_SOURCE_GOAL : // on the way to pick up zone
+            case Home_Service_State::ON_THE_WAY_TO_PICKUP_ZONE : // on the way to pick up zone
                 // debug_print(msg);
                 if (fabs(msg->pose.pose.position.x - this->goal_pose_.position.x) < this->distance_error &&
                     fabs(msg->pose.pose.position.y - this->goal_pose_.position.y) < this->distance_error) {
                     this->clear();  // whatever the goal has finished or not, clear all the actions,
-                                    // as according to the odom data, the robot already arrived the destination
+                    // as according to the odom data, the robot already arrived the destination
                     startJob();
                 }
                 break;
-            case Home_Service_State::ON_THE_WAY_TO_DESTINATION_GOAL : // on the way to drop off
+            case Home_Service_State::ON_THE_WAY_TO_DROPOFF_ZONE : // on the way to drop off
 //                debug_print(msg);
                 if (fabs(msg->pose.pose.position.x - this->goal_pose_.position.x) < this->distance_error &&
                     fabs(msg->pose.pose.position.y - this->goal_pose_.position.y) < this->distance_error) {
@@ -180,10 +185,12 @@ private:
     Home_Service_State robot_state_;  // 0:init, 1:on the way to pick up zone, 2: on the way to drop off zone, 3. none
     bool debug;
     float distance_error;
+
 };
 
 
 int main(int argc, char **argv) {
+
     // Initialize the simple_navigation_goals node
     ros::init(argc, argv, "pick_objects");
     ros::NodeHandle n;
