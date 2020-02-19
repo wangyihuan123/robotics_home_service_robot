@@ -13,7 +13,7 @@
 // Define a client for to send goal requests to the move_base server through a SimpleActionClient
 typedef actionlib::SimpleActionClient <move_base_msgs::MoveBaseAction> MoveBaseClient;
 
-void debug_print(const nav_msgs::Odometry::ConstPtr &msg) {
+void debug_print_msg(const nav_msgs::Odometry::ConstPtr &msg) {
     ROS_INFO("Seq: [%d]", msg->header.seq);
     ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", msg->pose.pose.position.x, msg->pose.pose.position.y,
              msg->pose.pose.position.z);
@@ -61,7 +61,8 @@ public:
     }
 
     void movebaseDoneCallback(void) {
-        ROS_INFO("movebaseDoneCallback");
+        if (debug)
+            ROS_INFO("movebaseDoneCallback");
         if (robot_state_ == Home_Service_State::ON_THE_WAY_TO_PICKUP_ZONE) {
             clear();
             startJob();
@@ -91,10 +92,12 @@ public:
     bool operateObject(const char *req) {
         add_markers::AddMarkers srv;
         srv.request.str_request = req;
-
-//        ROS_INFO("str_request: %s", srv.request.str_request.c_str());
+        if (debug)
+            ROS_INFO("str_request: %s", srv.request.str_request.c_str());
+        
         if (this->sc_->call(srv)) {
-            ROS_INFO("Response: %s", srv.response.str_response.c_str()); // todo: warning
+            if (debug)
+                ROS_INFO("Response: %s", srv.response.str_response.c_str());
             return true;
         } else {
             ROS_ERROR("Failed to call service add_markers");
@@ -104,13 +107,15 @@ public:
 
     void startJob(void) {
         // pickup the object:tell add_markers node to hide the object
-        ROS_INFO("Picking up... (about 5 sec)");
-        if (this->operateObject("pickup") == false) {
+        robot_state_ = Home_Service_State::START_PICKING_UP;
+        printCurrentState();
+//        ROS_INFO("Picking up... (about 5 sec)");
+        if (!this->operateObject("pickup")) {
             // error? check or print debug?
-//            debug_print(msg);
             return;
         }
         robot_state_ = Home_Service_State::FINISH_PICKING_UP;
+        printCurrentState();
 
         // set drop off goal
         goal_pose_ = destination_pose_;
@@ -121,8 +126,10 @@ public:
 
     void finishJob(void) {
         // pickup the object:tell add_markers node to show the object
-        ROS_INFO("Dropping off... (about 5 sec)");
-        if (this->operateObject("dropoff") == false) {
+//        ROS_INFO("Dropping off... (about 5 sec)");
+        robot_state_ = Home_Service_State::START_DROPPING_OFF;
+        printCurrentState();
+        if (!this->operateObject("dropoff")) {
             // error? check or print debug?
             return;
         }
@@ -146,7 +153,7 @@ public:
                 printCurrentState();
                 break;
             case Home_Service_State::ON_THE_WAY_TO_PICKUP_ZONE : // on the way to pick up zone
-                // debug_print(msg);
+                // debug_print_msg(msg);
                 if (fabs(msg->pose.pose.position.x - this->goal_pose_.position.x) < this->distance_error &&
                     fabs(msg->pose.pose.position.y - this->goal_pose_.position.y) < this->distance_error) {
                     this->clear();  // whatever the goal has finished or not, clear all the actions,
@@ -155,7 +162,7 @@ public:
                 }
                 break;
             case Home_Service_State::ON_THE_WAY_TO_DROPOFF_ZONE : // on the way to drop off
-//                debug_print(msg);
+//                debug_print_msg(msg);
                 if (fabs(msg->pose.pose.position.x - this->goal_pose_.position.x) < this->distance_error &&
                     fabs(msg->pose.pose.position.y - this->goal_pose_.position.y) < this->distance_error) {
                     this->clear();
