@@ -22,29 +22,26 @@ void debug_print(const nav_msgs::Odometry::ConstPtr &msg) {
     ROS_INFO("Vel-> Linear: [%f], Angular: [%f]", msg->twist.twist.linear.x, msg->twist.twist.angular.z);
 }
 
-void movebaseDoneCallback(void) {
-    ROS_INFO("movebaseDoneCallback");
-//        ROS_INFO("Finished in state [%s]", state.toString().c_str());
-//        ROS_INFO("Answer: %i", result->result);
-}
+enum class Home_Service_State {
+    BEGIN,
+//    SET_SOURCE_GOAL,
+    ON_THE_WAY_TO_SOURCE_GOAL,
+    REACH_SOURCE_GOAL,
+    START_PICKING_UP,
+    FINISH_PICKING_UP,
+//    SET_DESTINATION_GOAL,
+    ON_THE_WAY_TO_DESTINATION_GOAL,
+    REACH_DESTINATION_GOAL,
+    START_DROPPING_OFF,
+    FINISH_DROPPING_OFF,
+    END
 
-void movebaseActiveCallback(void) {
-    ROS_INFO("movebaseActiveCallback");
-//        ROS_INFO("Finished in state [%s]", state.toString().c_str());
-//        ROS_INFO("Answer: %i", result->result);
-}
-
-void movebaseFeedbackCallback(void) {
-    ROS_INFO("movebaseFeedbackCallback");
-//        ROS_INFO("Finished in state [%s]", state.toString().c_str());
-//        ROS_INFO("Answer: %i", result->result);
-}
-
+};
 
 class Listener {
 public:
     Listener(MoveBaseClient *ac, ros::ServiceClient *sc)
-            : ac_(ac), sc_(sc), robot_state_(0), distance_error(0.5), debug(false) {
+            : ac_(ac), sc_(sc), robot_state_(Home_Service_State::BEGIN), distance_error(0.5), debug(false) {
         // set the first goal for pick up zone:
         goal_pose_.position.x = -2.0;
         goal_pose_.position.y = 0;
@@ -55,21 +52,20 @@ public:
         goal_pose_.orientation.w = 1.0;
     };
 
-    void stop() {
+//    void setJob() {
+//    }
+
+    void clear() {
         this->ac_->cancelAllGoals();
     }
 
-//    void doneCallback(const actionlib::SimpleClientGoalState &state
-//                      const move_base_msgs::MoveBaseActionResult &result) {
-//        ROS_INFO("Finished in state [%s]", state.toString().c_str());
-////        ROS_INFO("Answer: %i", result->result);
-//    }
-
     void movebaseDoneCallback(void) {
         ROS_INFO("movebaseDoneCallback");
-        if (robot_state_ == 1) {
+        if (robot_state_ == Home_Service_State::ON_THE_WAY_TO_SOURCE_GOAL) {
+            clear();
             startJob();
-        } else if (robot_state_ == 2) {
+        } else if (robot_state_ == Home_Service_State::ON_THE_WAY_TO_DESTINATION_GOAL) {
+            clear();
             finishJob();
         }
     }
@@ -115,12 +111,13 @@ public:
 //            debug_print(msg);
             return;
         }
+        robot_state_ = Home_Service_State::FINISH_PICKING_UP;
 
         // set drop off goal
         this->goal_pose_.position.x = -3.0;
         this->goal_pose_.position.y = 1.5;
         move("heading to drop off", "drop off zone arrived");
-        robot_state_++;
+        robot_state_ = Home_Service_State::ON_THE_WAY_TO_DESTINATION_GOAL;
         ROS_INFO("state: %d", robot_state_);
     }
 
@@ -131,44 +128,39 @@ public:
             // error? check or print debug?
             return;
         }
+        robot_state_ = Home_Service_State::FINISH_DROPPING_OFF;
+//        ROS_INFO("Job done");
+        printCurrentState();
 
-        ROS_INFO("Job done");
-
-        robot_state_++;
-        ROS_INFO("state: %d", this->robot_state_);
     }
 
+    void printCurrentState(void) {
+        ROS_INFO("state: %d", this->robot_state_);
+    }
 
     void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
 //        ROS_INFO("state: %d", this->robot_state_);
 
         switch (robot_state_) {
-            case 0: // beginning, set goal to pick up zone
-//                memset(buff, 0, sizeof(buff));
-//                sprintf(buff, "heading to pick up => x: %f, y: %f", this->goal_pose_.position.x, this->goal_pose_.position.y);
+            case Home_Service_State::BEGIN : // beginning, set goal to pick up zone
                 move("heading to pick up", "pick up zone arrived");
-                this->robot_state_++;
+                this->robot_state_ = Home_Service_State ::ON_THE_WAY_TO_SOURCE_GOAL;
                 ROS_INFO("state: %d", this->robot_state_);
                 break;
-            case 1: // on the way to pick up zone
+            case Home_Service_State::ON_THE_WAY_TO_SOURCE_GOAL : // on the way to pick up zone
                 // debug_print(msg);
                 if (fabs(msg->pose.pose.position.x - this->goal_pose_.position.x) < this->distance_error &&
                     fabs(msg->pose.pose.position.y - this->goal_pose_.position.y) < this->distance_error) {
-                    this->stop();  // whatever the goal has finished or not, stop all the actions,
-                    // as according to the odom data we ready arrive the destination
+                    this->clear();  // whatever the goal has finished or not, clear all the actions,
+                                    // as according to the odom data, the robot already arrived the destination
                     startJob();
-
                 }
                 break;
-            case 2: // on the way to drop off
-                // todo: need to wait for display?? do this later
-                // on the way to drop off
-                // do nothing
+            case Home_Service_State::ON_THE_WAY_TO_DESTINATION_GOAL : // on the way to drop off
 //                debug_print(msg);
                 if (fabs(msg->pose.pose.position.x - this->goal_pose_.position.x) < this->distance_error &&
                     fabs(msg->pose.pose.position.y - this->goal_pose_.position.y) < this->distance_error) {
-                    this->stop();
-
+                    this->clear();
                     finishJob();
                 }
                 break;
@@ -183,7 +175,9 @@ private:
     MoveBaseClient *ac_;
     ros::ServiceClient *sc_;
     geometry_msgs::Pose goal_pose_;
-    int robot_state_;  // 0:init, 1:on the way to pick up zone, 2: on the way to drop off zone, 3. none
+//    geometry_msgs::Pose source_pose_;
+//    geometry_msgs::Pose destination_pose_;
+    Home_Service_State robot_state_;  // 0:init, 1:on the way to pick up zone, 2: on the way to drop off zone, 3. none
     bool debug;
     float distance_error;
 };
@@ -224,6 +218,27 @@ int main(int argc, char **argv) {
     // http://wiki.ros.org/ROS/Tutorials/WritingServiceClient%28c%2B%2B%29
     ros::ServiceClient client = n.serviceClient<add_markers::AddMarkers>("add_markers");
     Listener listener(&ac, &client);
+
+//    geometry_msgs::Pose pickup_pose, dropoff_pose;
+//
+//    pickup_pose.position.x = -2.0;
+//    pickup_pose.position.y = 0;
+//    pickup_pose.position.z = 0;
+//    pickup_pose.orientation.x = 0;
+//    pickup_pose.orientation.y = 0;
+//    pickup_pose.orientation.z = 0;
+//    pickup_pose.orientation.w = 1.0;
+//
+//    dropoff_pose.position.x = -3.0;
+//    dropoff_pose.position.y = 1.5;
+//    dropoff_pose.position.z = 0;
+//    dropoff_pose.orientation.x = 0;
+//    dropoff_pose.orientation.y = 0;
+//    dropoff_pose.orientation.z = 0;
+//    dropoff_pose.orientation.w = 1.0;
+//
+//    listener.setJob(pickup_pose, dropoff_pose);
+
     ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::odomCallback, &listener);
 
     ros::spin();
