@@ -45,20 +45,16 @@ std::string robot_state_str_[] = {
 
 class Listener {
 public:
-    Listener(MoveBaseClient *ac, ros::ServiceClient *sc)
-            : ac_(ac), sc_(sc), robot_state_(Home_Service_State::BEGIN), distance_error(0.5), debug(false) {
-        // set the first goal for pick up zone:
-        goal_pose_.position.x = -2.0;
-        goal_pose_.position.y = 0;
-        goal_pose_.position.z = 0;
-        goal_pose_.orientation.x = 0;
-        goal_pose_.orientation.y = 0;
-        goal_pose_.orientation.z = 0;
-        goal_pose_.orientation.w = 1.0;
+    Listener(MoveBaseClient *ac, ros::ServiceClient *sc,
+            geometry_msgs::Pose source_pose,  geometry_msgs::Pose destination_pose)
+            : ac_(ac), sc_(sc), robot_state_(Home_Service_State::BEGIN), distance_error(0.3), debug(false),
+            source_pose_(source_pose), destination_pose_(destination_pose){
     };
 
-//    void setJob() {
-//    }
+    void setJob(geometry_msgs::Pose source_pose,  geometry_msgs::Pose destination_pose) {
+        source_pose_ = source_pose;
+        destination_pose_ = destination_pose;
+    }
 
     void clear() {
         this->ac_->cancelAllGoals();
@@ -82,15 +78,13 @@ public:
         // set up the frame parameters
         goal.target_pose.header.frame_id = "map";
         goal.target_pose.header.stamp = ros::Time::now();
-
         goal.target_pose.pose = this->goal_pose_;
 
         ROS_INFO("%s => x: %f, y: %f", start_print, this->goal_pose_.position.x, this->goal_pose_.position.y);
 
-        // callback
+        // set doneCallback function
         // http://wiki.ros.org/actionlib_tutorials/Tutorials/Writing%20a%20Callback%20Based%20Simple%20Action%20Client
         this->ac_->sendGoal(goal, boost::bind(&Listener::movebaseDoneCallback, this));
-
 
     }
 
@@ -119,8 +113,7 @@ public:
         robot_state_ = Home_Service_State::FINISH_PICKING_UP;
 
         // set drop off goal
-        this->goal_pose_.position.x = -3.0;
-        this->goal_pose_.position.y = 1.5;
+        goal_pose_ = destination_pose_;
         move("heading to drop off", "drop off zone arrived");
         robot_state_ = Home_Service_State::ON_THE_WAY_TO_DROPOFF_ZONE;
         printCurrentState();
@@ -134,7 +127,6 @@ public:
             return;
         }
         robot_state_ = Home_Service_State::FINISH_DROPPING_OFF;
-//        ROS_INFO("Job done");
         printCurrentState();
 
     }
@@ -148,6 +140,7 @@ public:
 
         switch (robot_state_) {
             case Home_Service_State::BEGIN : // beginning, set goal to pick up zone
+                goal_pose_ = source_pose_;
                 move("heading to pick up", "pick up zone arrived");
                 this->robot_state_ = Home_Service_State::ON_THE_WAY_TO_PICKUP_ZONE;
                 printCurrentState();
@@ -180,8 +173,8 @@ private:
     MoveBaseClient *ac_;
     ros::ServiceClient *sc_;
     geometry_msgs::Pose goal_pose_;
-//    geometry_msgs::Pose source_pose_;
-//    geometry_msgs::Pose destination_pose_;
+    geometry_msgs::Pose source_pose_;
+    geometry_msgs::Pose destination_pose_;
     Home_Service_State robot_state_;  // 0:init, 1:on the way to pick up zone, 2: on the way to drop off zone, 3. none
     bool debug;
     float distance_error;
@@ -220,30 +213,30 @@ int main(int argc, char **argv) {
     // method 2: use class to add additional parameters for callback
 
 
-    // The key point is how to communicate with add_marker
+    // The key point is to communicate with add_marker
     // However, I prefer service/client way
     // http://wiki.ros.org/ROS/Tutorials/WritingServiceClient%28c%2B%2B%29
     ros::ServiceClient client = n.serviceClient<add_markers::AddMarkers>("add_markers");
-    Listener listener(&ac, &client);
 
-//    geometry_msgs::Pose pickup_pose, dropoff_pose;
-//
-//    pickup_pose.position.x = -2.0;
-//    pickup_pose.position.y = 0;
-//    pickup_pose.position.z = 0;
-//    pickup_pose.orientation.x = 0;
-//    pickup_pose.orientation.y = 0;
-//    pickup_pose.orientation.z = 0;
-//    pickup_pose.orientation.w = 1.0;
-//
-//    dropoff_pose.position.x = -3.0;
-//    dropoff_pose.position.y = 1.5;
-//    dropoff_pose.position.z = 0;
-//    dropoff_pose.orientation.x = 0;
-//    dropoff_pose.orientation.y = 0;
-//    dropoff_pose.orientation.z = 0;
-//    dropoff_pose.orientation.w = 1.0;
-//
+    geometry_msgs::Pose pickup_pose, dropoff_pose;
+
+    pickup_pose.position.x = -2.0;
+    pickup_pose.position.y = 0;
+    pickup_pose.position.z = 0;
+    pickup_pose.orientation.x = 0;
+    pickup_pose.orientation.y = 0;
+    pickup_pose.orientation.z = 0;
+    pickup_pose.orientation.w = 1.0;
+
+    dropoff_pose.position.x = -3.0;
+    dropoff_pose.position.y = 1.5;
+    dropoff_pose.position.z = 0;
+    dropoff_pose.orientation.x = 0;
+    dropoff_pose.orientation.y = 0;
+    dropoff_pose.orientation.z = 0;
+    dropoff_pose.orientation.w = 1.0;
+
+    Listener listener(&ac, &client, pickup_pose, dropoff_pose);
 //    listener.setJob(pickup_pose, dropoff_pose);
 
     ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::odomCallback, &listener);
