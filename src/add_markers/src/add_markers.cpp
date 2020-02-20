@@ -55,13 +55,13 @@ public:
             res.str_response = "done";
         } else {
             res.str_response = "what";
-            ROS_INFO("Unknown request: %s", req.str_request.c_str());  // todo: warning
+            ROS_INFO("Unknown request: %s", req.str_request.c_str());
         }
 
         return true;
     }
 
-    // don't need read odom from add_markers any more.
+    // don't need to read odom from add_markers any more.
 //    void odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
 //    }
 

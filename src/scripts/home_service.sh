@@ -15,5 +15,5 @@ sleep 5
 xterm  -e  " rosrun add_markers add_markers" &
 sleep 5
 
-xterm  -e  " rosrun pick_objects pick_objects"
+xterm  -e  " rosrun pick_objects pick_objects _param:=home_service"
 

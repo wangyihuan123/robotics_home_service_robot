@@ -6,7 +6,7 @@ A practice on Ros path planning and navigation
 For Home Service function:
 
 - Using actionlib::SimpleActionClient to send instruct(goal pose) to the robot to move.
-- Subscribe topic(odom) to check the the location of robot.
+- Subscribe topic(odom) to check the the location of robot only on pick_object node.
 - However, the goal pose is not the same as the pose from odom topic - always different. As a compromise, I prefer to trust odom's data.
 - Register a doneCallback function for action client so that we know when the action finish.
 - Regard the robot has reached the goal(pick up zone or drop off zone), if either action client's doneCallback occur or the pose from odom topic close to(buffer) goal's pose.

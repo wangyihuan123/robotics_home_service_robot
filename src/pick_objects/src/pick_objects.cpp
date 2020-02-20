@@ -9,6 +9,7 @@
 #include "add_markers/AddMarkers.h" // many thanks for this: https://answers.ros.org/question/242427/how-to-use-a-service-defined-in-another-package/
 #include "geometry_msgs/Pose.h"
 
+// See README.md for implementation detail explanation
 
 // Define a client for to send goal requests to the move_base server through a SimpleActionClient
 typedef actionlib::SimpleActionClient <move_base_msgs::MoveBaseAction> MoveBaseClient;
@@ -21,6 +22,11 @@ void debug_print_msg(const nav_msgs::Odometry::ConstPtr &msg) {
              msg->pose.pose.orientation.y, msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
     ROS_INFO("Vel-> Linear: [%f], Angular: [%f]", msg->twist.twist.linear.x, msg->twist.twist.angular.z);
 }
+
+enum class TASK {
+    PICK_OBJECTS = 0,
+    HOME_SERVICE
+};
 
 enum class Home_Service_State {
     BEGIN = 0,
@@ -45,13 +51,13 @@ std::string robot_state_str_[] = {
 
 class Listener {
 public:
-    Listener(MoveBaseClient *ac, ros::ServiceClient *sc,
-            geometry_msgs::Pose source_pose,  geometry_msgs::Pose destination_pose)
+    Listener(MoveBaseClient *ac, ros::ServiceClient *sc, TASK task,
+             geometry_msgs::Pose source_pose, geometry_msgs::Pose destination_pose)
             : ac_(ac), sc_(sc), robot_state_(Home_Service_State::BEGIN), distance_error(0.3), debug(false),
-            source_pose_(source_pose), destination_pose_(destination_pose){
+              source_pose_(source_pose), destination_pose_(destination_pose), task_(task) {
     };
 
-    void setJob(geometry_msgs::Pose source_pose,  geometry_msgs::Pose destination_pose) {
+    void setJob(geometry_msgs::Pose source_pose, geometry_msgs::Pose destination_pose) {
         source_pose_ = source_pose;
         destination_pose_ = destination_pose;
     }
@@ -94,7 +100,7 @@ public:
         srv.request.str_request = req;
         if (debug)
             ROS_INFO("str_request: %s", srv.request.str_request.c_str());
-        
+
         if (this->sc_->call(srv)) {
             if (debug)
                 ROS_INFO("Response: %s", srv.response.str_response.c_str());
@@ -109,11 +115,18 @@ public:
         // pickup the object:tell add_markers node to hide the object
         robot_state_ = Home_Service_State::START_PICKING_UP;
         printCurrentState();
-//        ROS_INFO("Picking up... (about 5 sec)");
-        if (!this->operateObject("pickup")) {
-            // error? check or print debug?
-            return;
+
+        if (task_ == TASK::PICK_OBJECTS) {
+            ROS_INFO("Arrived pickup zone");
+            ROS_INFO("Picking up... (about 5 sec)");
+            ros::Duration(5.0).sleep();
+        } else {
+            if (!this->operateObject("pickup")) {
+                // error? check or print debug?
+                return;
+            }
         }
+
         robot_state_ = Home_Service_State::FINISH_PICKING_UP;
         printCurrentState();
 
@@ -126,12 +139,18 @@ public:
 
     void finishJob(void) {
         // pickup the object:tell add_markers node to show the object
-//        ROS_INFO("Dropping off... (about 5 sec)");
         robot_state_ = Home_Service_State::START_DROPPING_OFF;
         printCurrentState();
-        if (!this->operateObject("dropoff")) {
-            // error? check or print debug?
-            return;
+
+        if (task_ == TASK::PICK_OBJECTS) {
+            ROS_INFO("Arrived drop off zone");
+            ROS_INFO("Dropping off... (about 5 sec)");
+            ros::Duration(5.0).sleep();
+        } else {
+            if (!this->operateObject("dropoff")) {
+                // error? check or print debug?
+                return;
+            }
         }
         robot_state_ = Home_Service_State::FINISH_DROPPING_OFF;
         printCurrentState();
@@ -177,6 +196,7 @@ public:
     }
 
 private:
+    TASK task_;
     MoveBaseClient *ac_;
     ros::ServiceClient *sc_;
     geometry_msgs::Pose goal_pose_;
@@ -195,14 +215,6 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, "pick_objects");
     ros::NodeHandle n;
 
-    // 1. pick_object set pickup goal for robot
-    // 2. pick_object subscribe topic odom and check the postion
-    // 3. if robot arrives pick up zone, send a request to add_markers to hide the object
-    // 4. after pick_object receive the response (hide action done), set drop off goal for robot
-    // 5. wait and check position again
-    // 6. if robot arrives drop off zone, send another request to add_markers to display the object
-    // 7. receive the response and print "done"
-
     //tell the action client that we want to spin a thread by default
     MoveBaseClient ac("move_base", true);
 
@@ -212,16 +224,9 @@ int main(int argc, char **argv) {
     }
 
     // important notes:
-    // Regard the robot as finished the goal if either ac_ return succeed or pose from odom == goal.pose
-
-
-    // todo: but still need to check the odom data, whether the robot is in the pick up zone or not
-    // otherwise, add_marker and pick_object can not synchronize the action.
-    // method 2: use class to add additional parameters for callback
-
-
+    // Regard the robot as finished the goal if either action client return succeed or pose from odom topic == goal.pose
     // The key point is to communicate with add_marker
-    // However, I prefer service/client way
+    // At last, I choose service way: client on pick_objects, server on add_markers
     // http://wiki.ros.org/ROS/Tutorials/WritingServiceClient%28c%2B%2B%29
     ros::ServiceClient client = n.serviceClient<add_markers::AddMarkers>("add_markers");
 
@@ -243,7 +248,27 @@ int main(int argc, char **argv) {
     dropoff_pose.orientation.z = 0;
     dropoff_pose.orientation.w = 1.0;
 
-    Listener listener(&ac, &client, pickup_pose, dropoff_pose);
+
+    ros::NodeHandle nh("~");  //  nh("~") to support Accessing Private Parameters
+    // http://wiki.ros.org/roscpp/Overview/Parameter%20Server
+    // https://answers.ros.org/question/299014/command-line-argument-passing-in-rosrun/
+
+    // use param to indicate whether it is from pick_objects.sh or home_service.sh
+    // usage: rosrun pick_objects pick_objects param:=home_service
+    std::string param;
+    TASK task = TASK::HOME_SERVICE; // default is home_service
+    if (nh.hasParam("param")) {
+        if (nh.getParam("param", param)) {
+            if (param.compare("home_service") == 0) {
+                task = TASK::HOME_SERVICE;
+            } else if (param.compare("pick_objects") == 0) {
+                task = TASK::PICK_OBJECTS;
+            }
+        }
+    }
+
+    Listener listener(&ac, &client, task, pickup_pose, dropoff_pose);
+
 //    listener.setJob(pickup_pose, dropoff_pose);
 
     ros::Subscriber sub = n.subscribe("odom", 1000, &Listener::odomCallback, &listener);
