@@ -40,3 +40,10 @@ So, the complete procedure as below. I indicate all the actions by different sta
 2. pick_objects receives the response and set state => FINISH_DROPPING_OFF.
 ### FINISH_DROPPING_OFF & END
 7. print "job done" and state => END
+
+
+For localization and navigation, please run pick_object.sh 
+
+For mapping test, please run test_slam.sh to manipulate the robot by keyboard.
+
+PS. I use turtlebot for this project. 

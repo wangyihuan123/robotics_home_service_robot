@@ -113,11 +113,11 @@ public:
 
     void startJob(void) {
         // pickup the object:tell add_markers node to hide the object
+        ROS_INFO("Arrived pickup zone");
         robot_state_ = Home_Service_State::START_PICKING_UP;
         printCurrentState();
 
         if (task_ == TASK::PICK_OBJECTS) {
-            ROS_INFO("Arrived pickup zone");
             ROS_INFO("Picking up... (about 5 sec)");
             ros::Duration(5.0).sleep();
         } else {
@@ -139,11 +139,11 @@ public:
 
     void finishJob(void) {
         // pickup the object:tell add_markers node to show the object
+        ROS_INFO("Arrived drop off zone");
         robot_state_ = Home_Service_State::START_DROPPING_OFF;
         printCurrentState();
 
         if (task_ == TASK::PICK_OBJECTS) {
-            ROS_INFO("Arrived drop off zone");
             ROS_INFO("Dropping off... (about 5 sec)");
             ros::Duration(5.0).sleep();
         } else {
