@@ -63,7 +63,7 @@ PS. I use turtlebot for this project.
     ├── turtlebot_simulator            # turtlebot_world.launch file   
     │   ├── turtlebot_gazebo  
     │   ├── ...  
-    ├──                                # Your packages and direcotries  
+    ├──                                # My packages and direcotries  
     |  
     ├── map                          # map files  
     │   ├── ...  
