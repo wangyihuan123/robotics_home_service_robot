@@ -188,6 +188,10 @@ public:
                     finishJob();
                 }
                 break;
+            case Home_Service_State::FINISH_DROPPING_OFF: // finish the job
+                robot_state_ = Home_Service_State::END;
+                printCurrentState();
+                break;
             default:
                 break;
         }
@@ -208,6 +212,28 @@ private:
 
 };
 
+TASK whichTask(void) {
+
+    ros::NodeHandle nh("~");  //  nh("~") to support Accessing Private Parameters
+    // http://wiki.ros.org/roscpp/Overview/Parameter%20Server
+    // https://answers.ros.org/question/299014/command-line-argument-passing-in-rosrun/
+
+    // use param to indicate whether it is from pick_objects.sh or home_service.sh
+    // usage: rosrun pick_objects pick_objects param:=home_service
+    std::string param;
+    TASK task = TASK::HOME_SERVICE; // default is home_service
+    if (nh.hasParam("param")) {
+        if (nh.getParam("param", param)) {
+            if (param.compare("home_service") == 0) {
+                task = TASK::HOME_SERVICE;
+            } else if (param.compare("pick_objects") == 0) {
+                task = TASK::PICK_OBJECTS;
+            }
+        }
+    }
+
+    return task;
+}
 
 int main(int argc, char **argv) {
 
@@ -249,24 +275,7 @@ int main(int argc, char **argv) {
     dropoff_pose.orientation.w = 1.0;
 
 
-    ros::NodeHandle nh("~");  //  nh("~") to support Accessing Private Parameters
-    // http://wiki.ros.org/roscpp/Overview/Parameter%20Server
-    // https://answers.ros.org/question/299014/command-line-argument-passing-in-rosrun/
-
-    // use param to indicate whether it is from pick_objects.sh or home_service.sh
-    // usage: rosrun pick_objects pick_objects param:=home_service
-    std::string param;
-    TASK task = TASK::HOME_SERVICE; // default is home_service
-    if (nh.hasParam("param")) {
-        if (nh.getParam("param", param)) {
-            if (param.compare("home_service") == 0) {
-                task = TASK::HOME_SERVICE;
-            } else if (param.compare("pick_objects") == 0) {
-                task = TASK::PICK_OBJECTS;
-            }
-        }
-    }
-
+    TASK task = whichTask();
     Listener listener(&ac, &client, task, pickup_pose, dropoff_pose);
 
 //    listener.setJob(pickup_pose, dropoff_pose);
